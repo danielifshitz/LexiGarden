@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAiModelUsagePoints,
+  buildDailyMarathonRunPoints,
   getCurrentTrainingStreak,
+  getRecentMarathonRuns,
   getNeedsAttentionWords,
   getRecentlyMasteredWords,
   resolveProgressRange,
+  summarizeMarathon,
   summarizeAiUsage,
   summarizeProgress,
 } from './progress';
-import type { AiUsageLog, ReviewAttempt, WordEntry, WordStatusTransition } from '../types';
+import type { AiUsageLog, MarathonRun, ReviewAttempt, WordEntry, WordStatusTransition } from '../types';
 
 const words: WordEntry[] = [
   {
@@ -154,6 +157,48 @@ const aiUsageLogs: AiUsageLog[] = [
   },
 ];
 
+const marathonRuns: MarathonRun[] = [
+  {
+    id: 'run-1',
+    startedAt: '2026-01-05T10:00:00.000Z',
+    finishedAt: '2026-01-05T10:03:00.000Z',
+    translationLanguage: 'Hebrew',
+    mode: 'all',
+    englishPromptPercentage: 50,
+    difficulty: 'study',
+    returnMissedCards: false,
+    totalCards: 6,
+    answeredCards: 6,
+    correctCount: 4,
+    wrongCount: 1,
+    timeoutCount: 1,
+    accuracy: 67,
+    meanAnswerTimeMs: 2400,
+    totalAnswerTimeMs: 14400,
+    longestStreak: 3,
+  },
+  {
+    id: 'run-2',
+    startedAt: '2026-01-06T10:00:00.000Z',
+    finishedAt: '2026-01-06T10:02:00.000Z',
+    translationLanguage: 'Hebrew',
+    mode: 'group',
+    group: 'food',
+    englishPromptPercentage: 100,
+    difficulty: 'easy',
+    returnMissedCards: true,
+    totalCards: 4,
+    answeredCards: 5,
+    correctCount: 3,
+    wrongCount: 2,
+    timeoutCount: 0,
+    accuracy: 60,
+    meanAnswerTimeMs: 1800,
+    totalAnswerTimeMs: 9000,
+    longestStreak: 2,
+  },
+];
+
 describe('progress helpers', () => {
   it('summarizes unique trained words, accuracy, and status changes for a period', () => {
     const range = resolveProgressRange({
@@ -223,5 +268,28 @@ describe('progress helpers', () => {
         value: 2,
       },
     ]);
+  });
+
+  it('summarizes marathon runs and builds recent run data', () => {
+    const range = resolveProgressRange({
+      preset: 'custom',
+      from: '2026-01-01',
+      to: '2026-01-31',
+    });
+
+    expect(summarizeMarathon(marathonRuns, range)).toEqual({
+      runsPlayed: 2,
+      totalAnswers: 11,
+      accuracy: 64,
+      meanAnswerTimeMs: 2127,
+      longestStreak: 3,
+    });
+
+    expect(buildDailyMarathonRunPoints(marathonRuns, range).filter((point) => point.value > 0)).toEqual([
+      { key: '2026-01-05', label: 'Jan 5', value: 1 },
+      { key: '2026-01-06', label: 'Jan 6', value: 1 },
+    ]);
+
+    expect(getRecentMarathonRuns(marathonRuns, range)[0]?.run.id).toBe('run-2');
   });
 });

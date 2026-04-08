@@ -60,6 +60,7 @@ const fontFamilyPreviewMap: Record<string, string> = {
 const layoutFields: Array<{
   key:
     | 'studyLayoutMode'
+    | 'marathonLayoutMode'
     | 'vocabularyLayoutMode'
     | 'chatLayoutMode'
     | 'progressLayoutMode'
@@ -67,6 +68,7 @@ const layoutFields: Array<{
   label: string;
 }> = [
   { key: 'studyLayoutMode', label: 'settingsStudyPage' },
+  { key: 'marathonLayoutMode', label: 'settingsMarathonPage' },
   { key: 'vocabularyLayoutMode', label: 'settingsVocabularyPage' },
   { key: 'chatLayoutMode', label: 'settingsChatPage' },
   { key: 'progressLayoutMode', label: 'settingsProgressPage' },
@@ -333,11 +335,14 @@ export function SettingsPanel({
       try {
         const result = await onDeleteLanguage(language);
         setLanguageMessage(
-          result.deletedWordCount > 0 || result.deletedChatCount > 0
+          result.deletedWordCount > 0 ||
+          result.deletedChatCount > 0 ||
+          result.deletedMarathonRunCount > 0
             ? t('settingsLanguageRemovedDetailed', {
                 language,
                 words: result.deletedWordCount,
                 chats: result.deletedChatCount,
+                runs: result.deletedMarathonRunCount,
               })
             : t('settingsLanguageRemovedSimple', { language }),
         );

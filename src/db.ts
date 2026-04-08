@@ -5,6 +5,8 @@ import type {
   AppSettings,
   BackupPayload,
   ChatSession,
+  MarathonAnswer,
+  MarathonRun,
   PageLayoutMode,
   PersistedState,
   PromptSide,
@@ -55,6 +57,7 @@ export const defaultSettings: AppSettings = {
   studyLayoutMode: 'split',
   vocabularyLayoutMode: 'split',
   chatLayoutMode: 'split',
+  marathonLayoutMode: 'split',
   progressLayoutMode: 'stacked',
   settingsLayoutMode: 'split',
   openRouterApiKey: '',
@@ -99,6 +102,7 @@ export interface DeleteWordsResult {
 export interface DeleteLanguageResult {
   deletedWordCount: number;
   deletedChatCount: number;
+  deletedMarathonRunCount: number;
 }
 
 export interface MergeWordsResult {
@@ -114,9 +118,11 @@ type LegacyWordRecord = Omit<WordEntry, 'translations' | 'groups'> & {
 };
 
 type LegacyBackupPayload = Omit<BackupPayload, 'version' | 'words'> & {
-  version: 1 | 2 | 3 | 4 | 5 | 6;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   words: LegacyWordRecord[];
   statusTransitions?: WordStatusTransition[];
+  marathonRuns?: MarathonRun[];
+  marathonAnswers?: MarathonAnswer[];
 };
 
 function normalizeTranslationLanguageList(value: unknown): string[] {
@@ -197,6 +203,10 @@ function normalizeSettings(input?: Record<string, unknown> | null): AppSettings 
       defaultSettings.vocabularyLayoutMode,
     ),
     chatLayoutMode: normalizeLayoutMode(source.chatLayoutMode, defaultSettings.chatLayoutMode),
+    marathonLayoutMode: normalizeLayoutMode(
+      source.marathonLayoutMode,
+      defaultSettings.marathonLayoutMode,
+    ),
     progressLayoutMode: normalizeLayoutMode(
       source.progressLayoutMode,
       defaultSettings.progressLayoutMode,
@@ -499,6 +509,8 @@ class EnglishCoachDatabase extends Dexie {
   chatSessions!: Table<ChatSession, string>;
   aiUsageLogs!: Table<AiUsageLog, string>;
   statusTransitions!: Table<WordStatusTransition, string>;
+  marathonRuns!: Table<MarathonRun, string>;
+  marathonAnswers!: Table<MarathonAnswer, string>;
   settings!: Table<AppSettings, 'app'>;
 
   constructor() {
@@ -554,6 +566,17 @@ class EnglishCoachDatabase extends Dexie {
           ),
         ]);
       });
+
+    this.version(5).stores({
+      words: 'id, createdAt, *groups, translationLanguage, reviewCount, lastSeenAt, snoozedUntilDate, knownAt',
+      reviewAttempts: 'id, wordId, shownAt, wasCorrect, action',
+      chatSessions: 'id, updatedAt, scope, translationLanguage',
+      aiUsageLogs: 'id, requestedAt, feature, success',
+      statusTransitions: 'id, wordId, changedAt, fromStatus, toStatus',
+      marathonRuns: 'id, finishedAt, translationLanguage, difficulty, mode',
+      marathonAnswers: 'id, runId, wordId, shownAt, wasCorrect, timedOut',
+      settings: 'id',
+    });
   }
 }
 
@@ -579,13 +602,23 @@ export async function ensureSettings(): Promise<AppSettings> {
 export async function getPersistedState(): Promise<PersistedState> {
   const settings = await ensureSettings();
 
-  const [storedWords, reviewAttempts, storedChatSessions, aiUsageLogs, statusTransitions] =
+  const [
+    storedWords,
+    reviewAttempts,
+    storedChatSessions,
+    aiUsageLogs,
+    statusTransitions,
+    marathonRuns,
+    marathonAnswers,
+  ] =
     await Promise.all([
       db.words.orderBy('createdAt').reverse().toArray(),
       db.reviewAttempts.orderBy('shownAt').reverse().toArray(),
       db.chatSessions.orderBy('updatedAt').reverse().toArray(),
       db.aiUsageLogs.orderBy('requestedAt').reverse().toArray(),
       db.statusTransitions.orderBy('changedAt').reverse().toArray(),
+      db.marathonRuns.orderBy('finishedAt').reverse().toArray(),
+      db.marathonAnswers.orderBy('shownAt').reverse().toArray(),
     ]);
   const words = storedWords.map(normalizeWordRecord);
   const wordMap = new Map(words.map((word) => [word.id, word]));
@@ -640,6 +673,8 @@ export async function getPersistedState(): Promise<PersistedState> {
     chatSessions,
     aiUsageLogs,
     statusTransitions,
+    marathonRuns,
+    marathonAnswers,
     settings: reconciledSettings,
   };
 }
@@ -976,11 +1011,20 @@ export async function deleteTranslationLanguage(language: string): Promise<Delet
 
   return db.transaction(
     'rw',
-    [db.words, db.reviewAttempts, db.statusTransitions, db.chatSessions, db.settings],
+    [
+      db.words,
+      db.reviewAttempts,
+      db.statusTransitions,
+      db.chatSessions,
+      db.marathonRuns,
+      db.marathonAnswers,
+      db.settings,
+    ],
     async () => {
-      const [storedWords, storedSessions, currentSettings] = await Promise.all([
+      const [storedWords, storedSessions, storedMarathonRuns, currentSettings] = await Promise.all([
         db.words.toArray(),
         db.chatSessions.toArray(),
+        db.marathonRuns.toArray(),
         ensureSettings(),
       ]);
       const words = storedWords.map(normalizeWordRecord);
@@ -994,6 +1038,10 @@ export async function deleteTranslationLanguage(language: string): Promise<Delet
         (session) =>
           normalizeForComparison(session.translationLanguage ?? '') === normalizedLanguage,
       );
+      const deletedMarathonRuns = storedMarathonRuns.filter(
+        (run) => normalizeForComparison(run.translationLanguage) === normalizedLanguage,
+      );
+      const deletedMarathonRunIds = deletedMarathonRuns.map((run) => run.id);
       const remainingSessions = storedSessions.filter(
         (session) =>
           normalizeForComparison(session.translationLanguage ?? '') !== normalizedLanguage,
@@ -1033,6 +1081,10 @@ export async function deleteTranslationLanguage(language: string): Promise<Delet
         deletedChatSessions.length > 0
           ? db.chatSessions.bulkDelete(deletedChatSessions.map((session) => session.id))
           : Promise.resolve(),
+        deletedMarathonRunIds.length > 0 ? db.marathonRuns.bulkDelete(deletedMarathonRunIds) : Promise.resolve(),
+        deletedMarathonRunIds.length > 0
+          ? db.marathonAnswers.where('runId').anyOf(deletedMarathonRunIds).delete()
+          : Promise.resolve(),
         updatedSessions.length > 0 ? db.chatSessions.bulkPut(updatedSessions) : Promise.resolve(),
         db.settings.put(nextSettings),
       ]);
@@ -1040,6 +1092,7 @@ export async function deleteTranslationLanguage(language: string): Promise<Delet
       return {
         deletedWordCount: wordIds.length,
         deletedChatCount: deletedChatSessions.length,
+        deletedMarathonRunCount: deletedMarathonRuns.length,
       };
     },
   );
@@ -1165,6 +1218,20 @@ export async function saveSettings(settings: AppSettings): Promise<AppSettings> 
   return normalized;
 }
 
+export async function saveMarathonRun(
+  run: MarathonRun,
+  answers: MarathonAnswer[],
+): Promise<MarathonRun> {
+  await db.transaction('rw', db.marathonRuns, db.marathonAnswers, async () => {
+    await db.marathonRuns.put(run);
+    if (answers.length > 0) {
+      await db.marathonAnswers.bulkPut(answers);
+    }
+  });
+
+  return run;
+}
+
 export async function upsertChatSession(session: ChatSession): Promise<ChatSession> {
   await db.chatSessions.put(session);
   return session;
@@ -1230,13 +1297,15 @@ export async function exportBackup(includeApiKey = false): Promise<BackupPayload
       };
 
   return {
-    version: 7,
+    version: 8,
     exportedAt: new Date().toISOString(),
     words: state.words,
     reviewAttempts: state.reviewAttempts,
     chatSessions: state.chatSessions,
     aiUsageLogs: state.aiUsageLogs,
     statusTransitions: state.statusTransitions,
+    marathonRuns: state.marathonRuns,
+    marathonAnswers: state.marathonAnswers,
     settings,
   };
 }
@@ -1244,6 +1313,8 @@ export async function exportBackup(includeApiKey = false): Promise<BackupPayload
 export async function importBackup(payload: BackupPayload | LegacyBackupPayload): Promise<void> {
   const currentSettings = await ensureSettings();
   const statusTransitions = payload.version === 1 ? [] : payload.statusTransitions ?? [];
+  const marathonRuns = payload.version >= 8 ? payload.marathonRuns ?? [] : [];
+  const marathonAnswers = payload.version >= 8 ? payload.marathonAnswers ?? [] : [];
   const normalizedWords = payload.words.map(normalizeWordRecord);
   const normalizedWordMap = new Map(normalizedWords.map((word) => [word.id, word]));
   const normalizedChatSessions = payload.chatSessions.map((session) =>
@@ -1269,7 +1340,16 @@ export async function importBackup(payload: BackupPayload | LegacyBackupPayload)
 
   await db.transaction(
     'rw',
-    [db.words, db.reviewAttempts, db.chatSessions, db.aiUsageLogs, db.statusTransitions, db.settings],
+    [
+      db.words,
+      db.reviewAttempts,
+      db.chatSessions,
+      db.aiUsageLogs,
+      db.statusTransitions,
+      db.marathonRuns,
+      db.marathonAnswers,
+      db.settings,
+    ],
     async () => {
       await Promise.all([
         db.words.clear(),
@@ -1277,6 +1357,8 @@ export async function importBackup(payload: BackupPayload | LegacyBackupPayload)
         db.chatSessions.clear(),
         db.aiUsageLogs.clear(),
         db.statusTransitions.clear(),
+        db.marathonRuns.clear(),
+        db.marathonAnswers.clear(),
       ]);
 
       await db.words.bulkPut(normalizedWords);
@@ -1284,6 +1366,8 @@ export async function importBackup(payload: BackupPayload | LegacyBackupPayload)
       await db.chatSessions.bulkPut(normalizedChatSessions);
       await db.aiUsageLogs.bulkPut(payload.aiUsageLogs);
       await db.statusTransitions.bulkPut(statusTransitions);
+      await db.marathonRuns.bulkPut(marathonRuns);
+      await db.marathonAnswers.bulkPut(marathonAnswers);
       await db.settings.put(reconciledSettings);
     },
   );
@@ -1292,7 +1376,16 @@ export async function importBackup(payload: BackupPayload | LegacyBackupPayload)
 export async function clearAllData(): Promise<void> {
   await db.transaction(
     'rw',
-    [db.words, db.reviewAttempts, db.chatSessions, db.aiUsageLogs, db.statusTransitions, db.settings],
+    [
+      db.words,
+      db.reviewAttempts,
+      db.chatSessions,
+      db.aiUsageLogs,
+      db.statusTransitions,
+      db.marathonRuns,
+      db.marathonAnswers,
+      db.settings,
+    ],
     async () => {
       await Promise.all([
         db.words.clear(),
@@ -1300,6 +1393,8 @@ export async function clearAllData(): Promise<void> {
         db.chatSessions.clear(),
         db.aiUsageLogs.clear(),
         db.statusTransitions.clear(),
+        db.marathonRuns.clear(),
+        db.marathonAnswers.clear(),
       ]);
 
       await db.settings.put(defaultSettings);

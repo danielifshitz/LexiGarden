@@ -203,23 +203,19 @@ export function buildStudyCards(
   selection: StudySelection,
   englishPromptPercentage = 50,
   todayDateKey = getTodayDateKey(),
-  repeatsPerWord = 1,
 ): StudyCard[] {
   const eligibleWords = selectWordsByMode(words, settings, selection).filter(
     (word) => word.snoozedUntilDate !== todayDateKey,
   );
   const safeEnglishPercentage = Math.max(0, Math.min(100, Math.round(englishPromptPercentage)));
-  const safeRepeatsPerWord = Math.max(1, Math.floor(repeatsPerWord));
   const cards: StudyCard[] = [];
 
   for (const word of shuffleArray(eligibleWords)) {
-    for (let repeatIndex = 0; repeatIndex < safeRepeatsPerWord; repeatIndex += 1) {
-      cards.push({
-        word,
-        promptSide: Math.random() * 100 < safeEnglishPercentage ? 'english' : 'translation',
-        id: createId(),
-      });
-    }
+    cards.push({
+      word,
+      promptSide: Math.random() * 100 < safeEnglishPercentage ? 'english' : 'translation',
+      id: createId(),
+    });
   }
 
   return shuffleArray(cards);

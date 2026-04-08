@@ -30,6 +30,7 @@ function makeSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     translationFontFamily: 'sans',
     textFontScale: 100,
     studyLayoutMode: 'split',
+    marathonLayoutMode: 'split',
     vocabularyLayoutMode: 'split',
     chatLayoutMode: 'split',
     progressLayoutMode: 'stacked',

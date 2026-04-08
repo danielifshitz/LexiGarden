@@ -19,15 +19,21 @@ import {
   buildDailyAccuracyPoints,
   buildDailyAiRequestPoints,
   buildDailyAiTokenPoints,
+  buildDailyMarathonAccuracyPoints,
+  buildDailyMarathonLongestStreakPoints,
+  buildDailyMarathonMeanTimePoints,
+  buildDailyMarathonRunPoints,
   buildDailyNewWordPoints,
   buildDailyTransitionPoints,
   buildDailyTrainedWordPoints,
   filterAiUsageByRange,
   getCurrentTrainingStreak,
+  getRecentMarathonRuns,
   getNeedsAttentionWords,
   getRecentlyMasteredWords,
   getTodayProgressRange,
   resolveProgressRange,
+  summarizeMarathon,
   summarizeAiUsage,
   summarizeProgress,
   type CountPoint,
@@ -45,6 +51,8 @@ import type {
   SupportedAppLanguage,
   WordEntry,
   WordStatusTransition,
+  MarathonAnswer,
+  MarathonRun,
 } from '../types';
 
 interface ProgressPanelProps {
@@ -52,6 +60,8 @@ interface ProgressPanelProps {
   reviewAttempts: ReviewAttempt[];
   aiUsageLogs: AiUsageLog[];
   statusTransitions: WordStatusTransition[];
+  marathonRuns: MarathonRun[];
+  marathonAnswers: MarathonAnswer[];
   appLanguage: SupportedAppLanguage;
   activeTranslationLanguage: string;
   availableTranslationLanguages: string[];
@@ -472,11 +482,35 @@ function HorizontalUsageGraph({
   );
 }
 
+function getMarathonDifficultyLabel(
+  difficulty: MarathonRun['difficulty'],
+  t: ReturnType<typeof createTranslator>,
+): string {
+  switch (difficulty) {
+    case 'study':
+      return t('marathonDifficultyStudy');
+    case 'easy':
+      return t('marathonDifficultyEasy');
+    case 'warm':
+      return t('marathonDifficultyWarm');
+    case 'medium':
+      return t('marathonDifficultyMedium');
+    case 'hard':
+      return t('marathonDifficultyHard');
+    case 'expert':
+      return t('marathonDifficultyExpert');
+    default:
+      return difficulty;
+  }
+}
+
 export function ProgressPanel({
   words,
   reviewAttempts,
   aiUsageLogs,
   statusTransitions,
+  marathonRuns,
+  marathonAnswers: _marathonAnswers,
   appLanguage,
   activeTranslationLanguage,
   availableTranslationLanguages,
@@ -523,6 +557,13 @@ export function ProgressPanel({
     () => statusTransitions.filter((transition) => filteredWordIds.has(transition.wordId)),
     [filteredWordIds, statusTransitions],
   );
+  const filteredMarathonRuns = useMemo(
+    () =>
+      effectiveLanguage
+        ? marathonRuns.filter((run) => run.translationLanguage === effectiveLanguage)
+        : marathonRuns,
+    [effectiveLanguage, marathonRuns],
+  );
 
   useEffect(() => {
     setSelectedLanguage(activeTranslationLanguage);
@@ -565,6 +606,34 @@ export function ProgressPanel({
     [filteredAttempts, filteredWords, periodRange],
   );
   const aiSummary = useMemo(() => summarizeAiUsage(aiUsageLogs, periodRange), [aiUsageLogs, periodRange]);
+  const marathonTodaySummary = useMemo(
+    () => summarizeMarathon(filteredMarathonRuns, todayRange),
+    [filteredMarathonRuns, todayRange],
+  );
+  const marathonPeriodSummary = useMemo(
+    () => summarizeMarathon(filteredMarathonRuns, periodRange),
+    [filteredMarathonRuns, periodRange],
+  );
+  const marathonRunPoints = useMemo(
+    () => buildDailyMarathonRunPoints(filteredMarathonRuns, periodRange),
+    [filteredMarathonRuns, periodRange],
+  );
+  const marathonAccuracyPoints = useMemo(
+    () => buildDailyMarathonAccuracyPoints(filteredMarathonRuns, periodRange),
+    [filteredMarathonRuns, periodRange],
+  );
+  const marathonMeanTimePoints = useMemo(
+    () => buildDailyMarathonMeanTimePoints(filteredMarathonRuns, periodRange),
+    [filteredMarathonRuns, periodRange],
+  );
+  const marathonLongestStreakPoints = useMemo(
+    () => buildDailyMarathonLongestStreakPoints(filteredMarathonRuns, periodRange),
+    [filteredMarathonRuns, periodRange],
+  );
+  const recentMarathonRuns = useMemo(
+    () => getRecentMarathonRuns(filteredMarathonRuns, periodRange),
+    [filteredMarathonRuns, periodRange],
+  );
   const filteredAiLogs = useMemo(
     () => filterAiUsageByRange(aiUsageLogs, periodRange),
     [aiUsageLogs, periodRange],
@@ -889,6 +958,98 @@ export function ProgressPanel({
             emptyLabel={t('commonNoDataYet')}
           />
         </div>
+      </section>
+
+      <section className="panel detail-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">{t('progressMarathonEyebrow')}</p>
+            <h2>{t('progressMarathonTitle')}</h2>
+          </div>
+          <p className="helper-text">{t('progressMarathonHelp')}</p>
+        </div>
+
+        <div className="summary-strip four-up">
+          <article>
+            <span>{marathonTodaySummary.runsPlayed}</span>
+            <p>{t('progressMarathonRunsToday')}</p>
+          </article>
+          <article>
+            <span>{marathonPeriodSummary.accuracy}%</span>
+            <p>{t('statAccuracy')}</p>
+          </article>
+          <article>
+            <span>{Math.round(marathonPeriodSummary.meanAnswerTimeMs / 100) / 10}s</span>
+            <p>{t('progressMarathonMeanTime')}</p>
+          </article>
+          <article>
+            <span>{marathonPeriodSummary.longestStreak}</span>
+            <p>{t('progressMarathonLongestStreak')}</p>
+          </article>
+        </div>
+
+        <div className="status-chip-row">
+          <span className="status-chip positive">
+            {`${marathonPeriodSummary.runsPlayed} ${t('progressMarathonRuns').toLocaleLowerCase()}`}
+          </span>
+          <span className="status-chip neutral">
+            {`${marathonPeriodSummary.totalAnswers} ${t('progressMarathonAnswers').toLocaleLowerCase()}`}
+          </span>
+        </div>
+
+        <div className="chart-grid">
+          <VerticalBarGraph
+            title={t('progressMarathonDailyRuns')}
+            points={marathonRunPoints}
+            valueLabel={t('progressMarathonRuns').toLocaleLowerCase()}
+            emptyLabel={t('commonNoDataYet')}
+          />
+          <AreaMetricGraph
+            title={t('progressMarathonDailyAccuracy')}
+            points={marathonAccuracyPoints}
+            valueLabel={t('statAccuracy').toLocaleLowerCase()}
+            valueSuffix="%"
+            domain={[0, 100]}
+            areaColor={chartColors.primarySoft}
+            emptyLabel={t('commonNoDataYet')}
+          />
+          <LineMetricGraph
+            title={t('progressMarathonDailyMeanTime')}
+            points={marathonMeanTimePoints}
+            valueLabel={t('progressMarathonMeanTime').toLocaleLowerCase()}
+            valueSuffix="ms"
+            emptyLabel={t('commonNoDataYet')}
+          />
+          <LineMetricGraph
+            title={t('progressMarathonDailyLongestStreak')}
+            points={marathonLongestStreakPoints}
+            valueLabel={t('progressMarathonLongestStreak').toLocaleLowerCase()}
+            emptyLabel={t('commonNoDataYet')}
+          />
+        </div>
+
+        <article className="chart-card progress-widget">
+          <h3>{t('progressMarathonRecentRuns')}</h3>
+          <div className="history-list compact-history">
+            {recentMarathonRuns.length === 0 ? (
+              <p className="helper-text">{t('progressMarathonNoRuns')}</p>
+            ) : (
+              recentMarathonRuns.map(({ run }) => (
+                <article key={run.id} className="history-row progress-list-row">
+                  <div>
+                    <strong>
+                      {`${t('navMarathon')} · ${run.translationLanguage}`}
+                    </strong>
+                    <p>
+                      {`${getMarathonDifficultyLabel(run.difficulty, t)} · ${run.accuracy}% · ${run.answeredCards} ${t('progressMarathonAnswers').toLocaleLowerCase()} · ${Math.round(run.meanAnswerTimeMs / 100) / 10}s`}
+                    </p>
+                  </div>
+                  <small>{formatDateTime(run.finishedAt)}</small>
+                </article>
+              ))
+            )}
+          </div>
+        </article>
       </section>
 
       <section className="panel detail-panel">

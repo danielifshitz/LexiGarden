@@ -4,10 +4,11 @@ export type WordStatus = 'new' | 'learning' | 'known';
 export type AiFeature = 'sentenceHint' | 'relatedWords' | 'nextWords' | 'chat' | 'addFromSelection';
 export type ReviewAction = 'check' | 'dontKnow' | 'dontShowToday';
 export type AiRequestState = 'idle' | 'loading' | 'success' | 'error';
-export type Screen = 'study' | 'vocabulary' | 'chat' | 'progress' | 'settings';
+export type Screen = 'study' | 'marathon' | 'vocabulary' | 'chat' | 'progress' | 'settings';
 export type ProgressRangePreset = '7d' | '30d' | 'month' | 'custom';
 export type PageLayoutMode = 'split' | 'stacked';
 export type SupportedAppLanguage = 'en' | 'he' | 'ru';
+export type MarathonDifficulty = 'study' | 'easy' | 'warm' | 'medium' | 'hard' | 'expert';
 
 export interface TranslationLanguageProfile {
   learnerName: string;
@@ -76,6 +77,7 @@ export interface AppSettings {
   translationFontFamily: string;
   textFontScale: number;
   studyLayoutMode: PageLayoutMode;
+  marathonLayoutMode: PageLayoutMode;
   vocabularyLayoutMode: PageLayoutMode;
   chatLayoutMode: PageLayoutMode;
   progressLayoutMode: PageLayoutMode;
@@ -116,14 +118,60 @@ export interface AiUsageLog {
   errorCode?: string;
 }
 
+export interface MarathonCard {
+  id: string;
+  wordId: string;
+  englishText: string;
+  translationText: string;
+  translationLanguage: string;
+  promptSide: PromptSide;
+}
+
+export interface MarathonRun {
+  id: string;
+  startedAt: string;
+  finishedAt: string;
+  translationLanguage: string;
+  mode: StudyMode;
+  group?: string;
+  englishPromptPercentage: number;
+  difficulty: MarathonDifficulty;
+  returnMissedCards: boolean;
+  totalCards: number;
+  answeredCards: number;
+  correctCount: number;
+  wrongCount: number;
+  timeoutCount: number;
+  accuracy: number;
+  meanAnswerTimeMs: number;
+  totalAnswerTimeMs: number;
+  longestStreak: number;
+}
+
+export interface MarathonAnswer {
+  id: string;
+  runId: string;
+  wordId: string;
+  translationText: string;
+  promptSide: PromptSide;
+  shownAt: string;
+  answerTimeMs: number;
+  selectedOption: string;
+  correctOption: string;
+  wasCorrect: boolean;
+  timedOut: boolean;
+}
+
 export interface BackupPayload {
-  version: 7;
+  version: 8;
   exportedAt: string;
   words: WordEntry[];
   reviewAttempts: ReviewAttempt[];
   chatSessions: ChatSession[];
   aiUsageLogs: AiUsageLog[];
   statusTransitions: WordStatusTransition[];
+  marathonRuns: MarathonRun[];
+  marathonAnswers: MarathonAnswer[];
   settings: Omit<AppSettings, 'openRouterApiKey'> & {
     openRouterApiKey?: string;
   };
@@ -185,5 +233,7 @@ export interface PersistedState {
   chatSessions: ChatSession[];
   aiUsageLogs: AiUsageLog[];
   statusTransitions: WordStatusTransition[];
+  marathonRuns: MarathonRun[];
+  marathonAnswers: MarathonAnswer[];
   settings: AppSettings;
 }

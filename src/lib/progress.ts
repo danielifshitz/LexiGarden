@@ -1,6 +1,7 @@
 import type {
   AiFeature,
   AiUsageLog,
+  MarathonRun,
   ProgressDateRange,
   ProgressRangePreset,
   ReviewAttempt,
@@ -59,6 +60,18 @@ export interface AiUsageSummary {
   successful: number;
   failed: number;
   totalTokens: number;
+}
+
+export interface MarathonSummary {
+  runsPlayed: number;
+  totalAnswers: number;
+  accuracy: number;
+  meanAnswerTimeMs: number;
+  longestStreak: number;
+}
+
+export interface RecentMarathonRun {
+  run: MarathonRun;
 }
 
 const statusOrder: Record<WordStatus, number> = {
@@ -216,6 +229,13 @@ function filterTransitionsByRange(
   return statusTransitions.filter((transition) =>
     isDateKeyInRange(toLocalDateKey(transition.changedAt), range),
   );
+}
+
+function filterMarathonRunsByRange(
+  marathonRuns: MarathonRun[],
+  range: ResolvedProgressRange,
+): MarathonRun[] {
+  return marathonRuns.filter((run) => isDateKeyInRange(toLocalDateKey(run.finishedAt), range));
 }
 
 export function summarizeProgress(
@@ -560,4 +580,121 @@ export function buildAiFeatureUsagePoints(
       label: getAiFeatureLabel(key as AiFeature) ?? key,
       value,
     }));
+}
+
+export function summarizeMarathon(
+  marathonRuns: MarathonRun[],
+  range: ResolvedProgressRange,
+): MarathonSummary {
+  const runs = filterMarathonRunsByRange(marathonRuns, range);
+  const totalAnswers = runs.reduce((sum, run) => sum + run.answeredCards, 0);
+  const totalCorrect = runs.reduce((sum, run) => sum + run.correctCount, 0);
+  const totalAnswerTimeMs = runs.reduce((sum, run) => sum + run.totalAnswerTimeMs, 0);
+
+  return {
+    runsPlayed: runs.length,
+    totalAnswers,
+    accuracy: totalAnswers === 0 ? 0 : Math.round((totalCorrect / totalAnswers) * 100),
+    meanAnswerTimeMs: totalAnswers === 0 ? 0 : Math.round(totalAnswerTimeMs / totalAnswers),
+    longestStreak: runs.reduce((highest, run) => Math.max(highest, run.longestStreak), 0),
+  };
+}
+
+export function buildDailyMarathonRunPoints(
+  marathonRuns: MarathonRun[],
+  range: ResolvedProgressRange,
+): CountPoint[] {
+  const counts = new Map<string, number>();
+
+  for (const run of filterMarathonRunsByRange(marathonRuns, range)) {
+    const key = toLocalDateKey(run.finishedAt);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return listDateKeys(range).map((key) => ({
+    key,
+    label: formatShortDate(key),
+    value: counts.get(key) ?? 0,
+  }));
+}
+
+export function buildDailyMarathonAccuracyPoints(
+  marathonRuns: MarathonRun[],
+  range: ResolvedProgressRange,
+): CountPoint[] {
+  const counts = new Map<string, { correct: number; total: number }>();
+
+  for (const run of filterMarathonRunsByRange(marathonRuns, range)) {
+    const key = toLocalDateKey(run.finishedAt);
+    const current = counts.get(key) ?? { correct: 0, total: 0 };
+    current.correct += run.correctCount;
+    current.total += run.answeredCards;
+    counts.set(key, current);
+  }
+
+  return listDateKeys(range).map((key) => {
+    const current = counts.get(key);
+    return {
+      key,
+      label: formatShortDate(key),
+      value:
+        current && current.total > 0 ? Math.round((current.correct / current.total) * 100) : 0,
+    };
+  });
+}
+
+export function buildDailyMarathonMeanTimePoints(
+  marathonRuns: MarathonRun[],
+  range: ResolvedProgressRange,
+): CountPoint[] {
+  const counts = new Map<string, { totalAnswerTimeMs: number; totalAnswers: number }>();
+
+  for (const run of filterMarathonRunsByRange(marathonRuns, range)) {
+    const key = toLocalDateKey(run.finishedAt);
+    const current = counts.get(key) ?? { totalAnswerTimeMs: 0, totalAnswers: 0 };
+    current.totalAnswerTimeMs += run.totalAnswerTimeMs;
+    current.totalAnswers += run.answeredCards;
+    counts.set(key, current);
+  }
+
+  return listDateKeys(range).map((key) => {
+    const current = counts.get(key);
+    return {
+      key,
+      label: formatShortDate(key),
+      value:
+        current && current.totalAnswers > 0
+          ? Math.round(current.totalAnswerTimeMs / current.totalAnswers)
+          : 0,
+    };
+  });
+}
+
+export function buildDailyMarathonLongestStreakPoints(
+  marathonRuns: MarathonRun[],
+  range: ResolvedProgressRange,
+): CountPoint[] {
+  const counts = new Map<string, number>();
+
+  for (const run of filterMarathonRunsByRange(marathonRuns, range)) {
+    const key = toLocalDateKey(run.finishedAt);
+    counts.set(key, Math.max(counts.get(key) ?? 0, run.longestStreak));
+  }
+
+  return listDateKeys(range).map((key) => ({
+    key,
+    label: formatShortDate(key),
+    value: counts.get(key) ?? 0,
+  }));
+}
+
+export function getRecentMarathonRuns(
+  marathonRuns: MarathonRun[],
+  range: ResolvedProgressRange,
+  limit = 5,
+): RecentMarathonRun[] {
+  return filterMarathonRunsByRange(marathonRuns, range)
+    .sort((left, right) => right.finishedAt.localeCompare(left.finishedAt))
+    .slice(0, limit)
+    .map((run) => ({ run }));
 }

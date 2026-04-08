@@ -129,20 +129,6 @@ describe('study selection helpers', () => {
     expect(translationOnlyCards.every((card) => card.promptSide === 'translation')).toBe(true);
   });
 
-  it('can repeat each eligible word for an endless session target', () => {
-    const repeatedCards = buildStudyCards(words, defaultSettings, { mode: 'all' }, 50, '2026-04-30', 3);
-
-    expect(repeatedCards).toHaveLength(words.length * 3);
-
-    const counts = repeatedCards.reduce<Record<string, number>>((current, card) => {
-      current[card.word.id] = (current[card.word.id] ?? 0) + 1;
-      return current;
-    }, {});
-
-    expect(counts['word-1']).toBe(3);
-    expect(counts['word-4']).toBe(3);
-  });
-
   it('builds cards only for the chosen translation language', () => {
     const filteredCards = buildStudyCards(
       filterWordsByTranslationLanguage(

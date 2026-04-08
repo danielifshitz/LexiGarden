@@ -32,6 +32,7 @@ import {
   logAiUsage,
   mergeMatchingWords,
   recordReviewAttempt,
+  saveMarathonRun,
   saveSettings,
   snoozeWordForToday,
   updateWord,
@@ -43,6 +44,7 @@ import {
   type WordDraft,
 } from './db';
 import { ChatPanel } from './components/ChatPanel';
+import { MarathonPanel } from './components/MarathonPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { StudyPanel } from './components/StudyPanel';
 import { VocabularyPanel } from './components/VocabularyPanel';
@@ -62,7 +64,6 @@ import { describeImportResult, describeWordMutation } from './lib/word-messages'
 import {
   filterWordsByTranslationLanguage,
   getAvailableTranslationLanguages,
-  getOverviewStats,
   getPrimaryTranslationLanguage,
   getSelectionLabel,
   resolveActiveTranslationLanguage,
@@ -80,6 +81,8 @@ import type {
   StudySelection,
   WordEntry,
   WordStatusTransition,
+  MarathonRun,
+  MarathonAnswer,
 } from './types';
 
 const ProgressPanel = lazy(async () => {
@@ -109,6 +112,8 @@ export default function App() {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [aiUsageLogs, setAiUsageLogs] = useState<PersistedState['aiUsageLogs']>([]);
   const [statusTransitions, setStatusTransitions] = useState<WordStatusTransition[]>([]);
+  const [marathonRuns, setMarathonRuns] = useState<MarathonRun[]>([]);
+  const [marathonAnswers, setMarathonAnswers] = useState<MarathonAnswer[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [models, setModels] = useState<OpenRouterModel[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -145,6 +150,8 @@ export default function App() {
       setChatSessions(nextState.chatSessions);
       setAiUsageLogs(nextState.aiUsageLogs);
       setStatusTransitions(nextState.statusTransitions);
+      setMarathonRuns(nextState.marathonRuns);
+      setMarathonAnswers(nextState.marathonAnswers);
       setSettings(nextState.settings);
 
       if (nextState.chatSessions.length === 0) {
@@ -343,11 +350,14 @@ export default function App() {
     setFlashMessage({
       kind: 'success',
       text:
-        result.deletedWordCount > 0 || result.deletedChatCount > 0
+        result.deletedWordCount > 0 ||
+        result.deletedChatCount > 0 ||
+        result.deletedMarathonRunCount > 0
           ? t('appDeletedLanguageDetailed', {
               language,
               words: result.deletedWordCount,
               chats: result.deletedChatCount,
+              runs: result.deletedMarathonRunCount,
             })
           : t('appDeletedLanguageSimple', { language }),
     });
@@ -376,6 +386,11 @@ export default function App() {
 
   async function handleSnoozeWord(wordId: string, promptSide: 'english' | 'translation') {
     await snoozeWordForToday(wordId, promptSide);
+    await refreshState();
+  }
+
+  async function handleSaveMarathonRun(run: MarathonRun, answers: MarathonAnswer[]) {
+    await saveMarathonRun(run, answers);
     await refreshState();
   }
 
@@ -870,8 +885,6 @@ export default function App() {
     ...settings,
     ...activeLanguageProfile,
   };
-  const activeLanguageWords = filterWordsByTranslationLanguage(words, activeTranslationLanguage);
-  const stats = getOverviewStats(activeLanguageWords, scopedSettings);
   const aiReady = Boolean(settings.openRouterApiKey.trim() && settings.openRouterModel.trim());
   const visibleChatSessions = chatSessions.filter(
     (session) => session.translationLanguage === activeTranslationLanguage,
@@ -890,6 +903,7 @@ export default function App() {
   } as CSSProperties;
   const screenLabels: Record<Screen, string> = {
     study: liveT('navStudy'),
+    marathon: liveT('navMarathon'),
     vocabulary: liveT('navVocabulary'),
     chat: liveT('navChat'),
     progress: liveT('navProgress'),
@@ -912,21 +926,6 @@ export default function App() {
               : liveT('heroTitle')}
           </h1>
           <p className="hero-copy">{liveT('heroCopy')}</p>
-
-          <div className="hero-stats">
-            <article>
-              <span>{stats.totalWords}</span>
-              <p>{liveT('statTotalWords')}</p>
-            </article>
-            <article>
-              <span>{stats.knownWords}</span>
-              <p>{liveT('statKnown')}</p>
-            </article>
-            <article>
-              <span>{stats.averageAccuracy}%</span>
-              <p>{liveT('statAccuracy')}</p>
-            </article>
-          </div>
         </div>
 
         <div className="hero-side">
@@ -1000,6 +999,17 @@ export default function App() {
           />
         </section>
 
+        <section className={screen === 'marathon' ? 'screen-panel active' : 'screen-panel hidden'}>
+          <MarathonPanel
+            words={words}
+            settings={scopedSettings}
+            appLanguage={appLanguage}
+            activeTranslationLanguage={activeTranslationLanguage}
+            layoutMode={settings.marathonLayoutMode}
+            onSaveRun={handleSaveMarathonRun}
+          />
+        </section>
+
         <section className={screen === 'vocabulary' ? 'screen-panel active' : 'screen-panel hidden'}>
           <VocabularyPanel
             words={words}
@@ -1061,6 +1071,8 @@ export default function App() {
               reviewAttempts={reviewAttempts}
               aiUsageLogs={aiUsageLogs}
               statusTransitions={statusTransitions}
+              marathonRuns={marathonRuns}
+              marathonAnswers={marathonAnswers}
               appLanguage={appLanguage}
               activeTranslationLanguage={activeTranslationLanguage}
               availableTranslationLanguages={availableTranslationLanguages}

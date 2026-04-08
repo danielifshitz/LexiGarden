@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
 import { createTranslator } from '../lib/i18n';
+import { PromptMixPicker } from './PromptMixPicker';
 import {
   areAnswersEquivalent,
   findMatchingAnswerOption,
@@ -55,38 +55,6 @@ interface FeedbackState {
   answerList?: string[];
 }
 
-function getPromptMixSummary(
-  englishPromptPercentage: number,
-  translationLanguageLabel: string,
-  t: ReturnType<typeof createTranslator>,
-): string {
-  if (englishPromptPercentage === 100) {
-    return t('studyPromptEnglishOnly');
-  }
-
-  if (englishPromptPercentage === 0) {
-    return t('studyPromptTranslationOnly', { language: translationLanguageLabel });
-  }
-
-  if (englishPromptPercentage >= 75) {
-    return t('studyPromptMostlyEnglish');
-  }
-
-  if (englishPromptPercentage > 50) {
-    return t('studyPromptMoreEnglish');
-  }
-
-  if (englishPromptPercentage === 50) {
-    return t('studyPromptBalanced');
-  }
-
-  if (englishPromptPercentage <= 25) {
-    return t('studyPromptMostlyTranslation', { language: translationLanguageLabel });
-  }
-
-  return t('studyPromptMoreTranslation', { language: translationLanguageLabel });
-}
-
 export function StudyPanel({
   words,
   settings,
@@ -105,7 +73,6 @@ export function StudyPanel({
   const studyAreaRef = useRef<HTMLElement | null>(null);
   const [selection, setSelection] = useState<StudySelection>({ mode: 'all' });
   const [englishPromptPercentage, setEnglishPromptPercentage] = useState(50);
-  const [endlessSession, setEndlessSession] = useState(false);
   const [cards, setCards] = useState<StudyCard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answer, setAnswer] = useState('');
@@ -128,16 +95,6 @@ export function StudyPanel({
       : 'study-prompt translation-display translation-text';
   const answerInputClassName =
     currentCard?.promptSide === 'english' ? 'translation-input' : 'english-input';
-  const sessionTargetShows = endlessSession ? settings.masteryThreshold : 1;
-  const translationPromptPercentage = 100 - englishPromptPercentage;
-  const dividerPosition = Math.min(98, Math.max(2, englishPromptPercentage));
-  const promptMixVisualStyle = {
-    '--prompt-english': `${englishPromptPercentage}%`,
-    '--prompt-translation': `${translationPromptPercentage}%`,
-    '--prompt-english-shift': `${(englishPromptPercentage - 50) * 0.24}px`,
-    '--prompt-translation-shift': `${(50 - englishPromptPercentage) * 0.24}px`,
-  } as CSSProperties;
-
   useEffect(() => {
     if (selection.mode === 'group' && selection.group) {
       return;
@@ -154,8 +111,6 @@ export function StudyPanel({
       settings,
       selection,
       englishPromptPercentage,
-      undefined,
-      sessionTargetShows,
     );
     setCards(nextCards);
     setCurrentIndex(0);
@@ -363,89 +318,18 @@ export function StudyPanel({
             </label>
           ) : null}
 
-          <div className="prompt-mix-field full-width">
-            <div className="prompt-mix-head">
-              <strong>{getPromptMixSummary(englishPromptPercentage, translationLabel, t)}</strong>
-            </div>
-            <div
-              className="prompt-mix-visual"
-              role="group"
-              aria-label={t('studyMode')}
-              style={promptMixVisualStyle}
-            >
-              <div className="prompt-mix-layer prompt-mix-layer-english" aria-hidden="true">
-                <div className="prompt-mix-scene prompt-mix-scene-english" />
-                <span className="prompt-mix-watermark english-text">{t('commonEnglish')}</span>
-              </div>
-              <div className="prompt-mix-layer prompt-mix-layer-translation" aria-hidden="true">
-                <div className="prompt-mix-scene prompt-mix-scene-translation" />
-                <span className="prompt-mix-watermark translation-text">{translationLabel}</span>
-              </div>
-
-              <div className="prompt-mix-side prompt-mix-side-english" aria-hidden="true">
-                <strong>{englishPromptPercentage}%</strong>
-                <span>{t('commonEnglish')}</span>
-              </div>
-              <div className="prompt-mix-side prompt-mix-side-translation" aria-hidden="true">
-                <strong>{translationPromptPercentage}%</strong>
-                <span>{translationLabel}</span>
-              </div>
-
-              <div className="prompt-mix-divider" style={{ left: `${dividerPosition}%` }} aria-hidden="true">
-                <span className="prompt-mix-handle" />
-              </div>
-
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={englishPromptPercentage}
-                onChange={(event) => setEnglishPromptPercentage(Number(event.target.value))}
-                className="prompt-mix-slider"
-                aria-label={`${translationLabel} / ${t('commonEnglish')}`}
-              />
-            </div>
-            <div className="prompt-mix-presets" role="group" aria-label={t('studyMode')}>
-              {[0, 50, 100].map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={englishPromptPercentage === value ? 'prompt-mix-preset active' : 'prompt-mix-preset'}
-                  onClick={() => setEnglishPromptPercentage(value)}
-                >
-                  {value === 0
-                    ? translationLabel
-                    : value === 100
-                      ? t('commonEnglish')
-                      : `${value}/${100 - value}`}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <label className="checkbox-row full-width">
-            <input
-              type="checkbox"
-              checked={endlessSession}
-              onChange={(event) => setEndlessSession(event.target.checked)}
-            />
-            <span>
-              {t('studyMarathon')}
-              <small>
-                {t('studyMarathonHelp', { count: settings.masteryThreshold })}
-              </small>
-            </span>
-          </label>
+          <PromptMixPicker
+            value={englishPromptPercentage}
+            onChange={setEnglishPromptPercentage}
+            appLanguage={appLanguage}
+            translationLabel={translationLabel}
+          />
         </div>
 
         <div className="session-badges">
           <span>{getSelectionLabel(selection.mode, selection.group)}</span>
           <span>{activeTranslationLanguage || t('chatNoActiveLanguage')}</span>
-          <span>{getPromptMixSummary(englishPromptPercentage, translationLabel, t)}</span>
           <span>{t('studyEligibleToday', { count: candidateCount })}</span>
-          {endlessSession ? (
-            <span>{t('studyRepeatEachWord', { count: settings.masteryThreshold })}</span>
-          ) : null}
         </div>
 
         <div className="summary-strip">
@@ -467,11 +351,7 @@ export function StudyPanel({
       <section ref={studyAreaRef} className="panel study-panel">
         {cards.length > 0 && currentIndex >= cards.length ? (
           <div className="empty-state large">
-            <p>
-              {endlessSession
-                ? t('studyCompleteMarathon', { count: settings.masteryThreshold })
-                : t('studyComplete')}
-            </p>
+            <p>{t('studyComplete')}</p>
             <button type="button" className="primary-button" onClick={startSession}>
               {t('studyStartAnotherRound')}
             </button>
