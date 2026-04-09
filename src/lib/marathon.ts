@@ -149,8 +149,16 @@ export function buildMarathonChoices(
   const correctOption = card.promptSide === 'english' ? card.translationText : card.englishText;
   const pool =
     card.promptSide === 'english'
-      ? dedupeLabels(cards.map((item) => item.translationText))
-      : dedupeLabels(cards.map((item) => item.englishText));
+      ? dedupeLabels(
+          cards
+            .filter((item) => item.wordId !== card.wordId)
+            .map((item) => item.translationText),
+        )
+      : dedupeLabels(
+          cards
+            .filter((item) => item.wordId !== card.wordId)
+            .map((item) => item.englishText),
+        );
   const wrongOptions = shuffleArray(
     pool.filter((value) => normalizeForComparison(value) !== normalizeForComparison(correctOption)),
   ).slice(0, Math.max(0, optionCount - 1));

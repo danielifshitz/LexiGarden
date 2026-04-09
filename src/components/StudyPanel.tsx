@@ -14,7 +14,6 @@ import {
   buildStudyCards,
   buildWordPrompt,
   filterWordsByTranslationLanguage,
-  getSelectionLabel,
   getUniqueGroups,
   selectWordsByMode,
 } from '../lib/study';
@@ -87,6 +86,7 @@ export function StudyPanel({
     const todayKey = getTodayDateKey();
     return word.snoozedUntilDate !== todayKey;
   }).length;
+  const canStartSession = Boolean(activeTranslationLanguage) && candidateCount > 0;
 
   const currentCard = cards[currentIndex] ?? null;
   const promptClassName =
@@ -105,26 +105,51 @@ export function StudyPanel({
     }
   }, [groups, selection.mode, selection.group]);
 
-  function startSession() {
-    const nextCards = buildStudyCards(
-      activeLanguageWords,
-      settings,
-      selection,
-      englishPromptPercentage,
-    );
-    setCards(nextCards);
+  function resetSessionState() {
+    setCards([]);
     setCurrentIndex(0);
     setAnswer('');
     setFeedback(null);
     setHintVisible(false);
     setUsedHint(false);
     setSummary({ correct: 0, incorrect: 0, snoozed: 0 });
+  }
+
+  function startSession() {
+    if (!canStartSession) {
+      return;
+    }
+
+    const nextCards = buildStudyCards(
+      activeLanguageWords,
+      settings,
+      selection,
+      englishPromptPercentage,
+    );
+    resetSessionState();
+    setCards(nextCards);
     requestAnimationFrame(() => {
       studyAreaRef.current?.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       });
     });
+  }
+
+  function getSetupMessage() {
+    if (!activeTranslationLanguage) {
+      return t('studyChooseLanguageFirst');
+    }
+
+    if (activeLanguageWords.length === 0) {
+      return t('studyAddWordsFirst', { language: activeTranslationLanguage });
+    }
+
+    if (candidateCount === 0) {
+      return t('studyNoReadyWords');
+    }
+
+    return '';
   }
 
   function goToNextCard() {
@@ -274,7 +299,7 @@ export function StudyPanel({
             <p className="eyebrow">{t('studyEyebrow')}</p>
             <h2>{t('studyTitle')}</h2>
           </div>
-          <button type="button" className="primary-button" onClick={startSession}>
+          <button type="button" className="primary-button" disabled={!canStartSession} onClick={startSession}>
             {cards.length > 0 ? t('studyReshuffle') : t('studyStartSession')}
           </button>
         </div>
@@ -327,10 +352,10 @@ export function StudyPanel({
         </div>
 
         <div className="session-badges">
-          <span>{getSelectionLabel(selection.mode, selection.group)}</span>
-          <span>{activeTranslationLanguage || t('chatNoActiveLanguage')}</span>
           <span>{t('studyEligibleToday', { count: candidateCount })}</span>
         </div>
+
+        {getSetupMessage() ? <p className="helper-text">{getSetupMessage()}</p> : null}
 
         <div className="summary-strip">
           <article>
@@ -367,14 +392,9 @@ export function StudyPanel({
                 <span>
                   {t('studyCardCounter', { current: currentIndex + 1, total: cards.length })}
                 </span>
-                <span>
-                  {t('studyShowedIn', {
-                    language:
-                      currentCard.promptSide === 'english'
-                        ? t('commonEnglish')
-                        : currentCard.word.translationLanguage,
-                  })}
-                </span>
+                <button type="button" className="ghost-button" onClick={resetSessionState}>
+                  {t('studyEndSession')}
+                </button>
               </div>
 
               <h2 className={promptClassName}>{buildWordPrompt(currentCard.word, currentCard.promptSide)}</h2>

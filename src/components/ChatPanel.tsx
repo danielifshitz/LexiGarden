@@ -120,6 +120,7 @@ export function ChatPanel({
   const [renamingSessionId, setRenamingSessionId] = useState('');
   const [renameValue, setRenameValue] = useState('');
   const [tutorPrompt, setTutorPrompt] = useState('');
+  const [setupCollapsed, setSetupCollapsed] = useState(false);
   const [manualDraft, setManualDraft] = useState<ManualDraftState>(
     buildEmptyManualDraft(activeTranslationLanguage),
   );
@@ -177,6 +178,12 @@ export function ChatPanel({
     setRenameValue('');
     clearSelectionDraft();
   }, [activeChatSession?.id]);
+
+  useEffect(() => {
+    if (!activeChatSession) {
+      setSetupCollapsed(false);
+    }
+  }, [activeChatSession]);
 
   useEffect(() => {
     if (selection.mode !== 'group') {
@@ -433,236 +440,241 @@ export function ChatPanel({
     }
   }
 
+  const hideSetupPanel = setupCollapsed && Boolean(activeChatSession);
+
   return (
-    <div className={`panel-grid chat-layout ${layoutMode === 'stacked' ? 'stacked-layout' : ''}`}>
-      <section className="panel accent-panel">
+    <div
+      className={`panel-grid chat-layout ${layoutMode === 'stacked' ? 'stacked-layout' : ''}${hideSetupPanel ? ' setup-hidden' : ''}`}
+    >
+      <section className={`panel accent-panel${hideSetupPanel ? ' hidden' : ''}`}>
         <div className="panel-heading">
           <div>
             <p className="eyebrow">{t('chatEyebrow')}</p>
             <h2>{t('chatTitle')}</h2>
           </div>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={!aiReady || selectableWords.length === 0 || isChatBusy}
-            onClick={() => void handleStartChat()}
-          >
-            {t('chatNew')}
-          </button>
+          <div className="action-row narrow">
+            <button
+              type="button"
+              className="primary-button"
+              disabled={!aiReady || selectableWords.length === 0 || isChatBusy}
+              onClick={() => void handleStartChat()}
+            >
+              {t('chatNew')}
+            </button>
+          </div>
         </div>
 
-        <div className="filter-grid">
-          <label>
-            {t('chatScope')}
-            <select
-              value={selection.mode}
-              onChange={(event) =>
-                setSelection({
-                  mode: event.target.value as StudySelection['mode'],
-                  group: event.target.value === 'group' ? selection.group ?? groups[0] : undefined,
-                })
-              }
-            >
-              <option value="all">{t('studyModeAll')}</option>
-              <option value="lastAdded">{t('studyModeLastAdded')}</option>
-              <option value="group">{t('studyModeGroup')}</option>
-              <option value="lessKnown">{t('studyModeLessKnown')}</option>
-              <option value="lessSeen">{t('studyModeLessSeen')}</option>
-            </select>
-          </label>
-
-          {selection.mode === 'group' ? (
+        <div className={`chat-setup-body${setupCollapsed ? ' collapsed' : ''}`}>
+          <div className="filter-grid">
             <label>
-              {t('commonGroup')}
+              {t('chatScope')}
               <select
-                value={selection.group ?? groups[0] ?? ''}
-                onChange={(event) => setSelection({ mode: 'group', group: event.target.value })}
+                value={selection.mode}
+                onChange={(event) =>
+                  setSelection({
+                    mode: event.target.value as StudySelection['mode'],
+                    group: event.target.value === 'group' ? selection.group ?? groups[0] : undefined,
+                  })
+                }
               >
-                {groups.map((group) => (
-                  <option key={group} value={group}>
-                    {group}
-                  </option>
-                ))}
+                <option value="all">{t('studyModeAll')}</option>
+                <option value="lastAdded">{t('studyModeLastAdded')}</option>
+                <option value="group">{t('studyModeGroup')}</option>
+                <option value="lessKnown">{t('studyModeLessKnown')}</option>
+                <option value="lessSeen">{t('studyModeLessSeen')}</option>
               </select>
             </label>
+
+            {selection.mode === 'group' ? (
+              <label>
+                {t('commonGroup')}
+                <select
+                  value={selection.group ?? groups[0] ?? ''}
+                  onChange={(event) => setSelection({ mode: 'group', group: event.target.value })}
+                >
+                  {groups.map((group) => (
+                    <option key={group} value={group}>
+                      {group}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+
+          <label className="full-width">
+            {t('chatTutorPrompt')}
+            <textarea
+              rows={3}
+              value={tutorPrompt}
+              onChange={(event) => setTutorPrompt(event.target.value)}
+              placeholder={t('chatTutorPromptPlaceholder')}
+              disabled={isChatBusy}
+            />
+          </label>
+
+          <div className="session-badges">
+            <span>{t('chatWordsInScope', { count: selectableWords.length })}</span>
+            <span>{aiReady ? t('chatAiReady') : t('chatSetUpAi')}</span>
+          </div>
+
+          {selection.mode === 'group' && groups.length === 0 ? (
+            <p className="helper-text">{t('chatGroupedWordsHelp')}</p>
+          ) : null}
+
+          {localMessage ? <p className="helper-text">{localMessage}</p> : null}
+          <div className="session-list">
+            <h3>{t('chatRecentChats')}</h3>
+            {chatSessions.length === 0 ? (
+              <p className="helper-text">
+                {activeTranslationLanguage
+                  ? t('chatNoChatsForLanguage', { language: activeTranslationLanguage })
+                  : t('chatNoChats')}
+              </p>
+            ) : (
+              chatSessions.slice(0, 6).map((session) => (
+                <article
+                  key={session.id}
+                  className={activeChatSession?.id === session.id ? 'session-card active' : 'session-card'}
+                >
+                  {renamingSessionId === session.id ? (
+                    <div className="session-rename-form">
+                      <input
+                        value={renameValue}
+                        onChange={(event) => setRenameValue(event.target.value)}
+                        placeholder={t('chatChatNamePlaceholder')}
+                        autoFocus
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && renameValue.trim()) {
+                            event.preventDefault();
+                            void handleRenameChat(session);
+                          }
+                        }}
+                      />
+                      <div className="session-card-actions">
+                        <button
+                          type="button"
+                          className="link-button"
+                          disabled={!renameValue.trim() || isChatBusy}
+                          onClick={() => void handleRenameChat(session)}
+                        >
+                          {t('chatSave')}
+                        </button>
+                        <button type="button" className="link-button" disabled={isChatBusy} onClick={cancelRename}>
+                          {t('chatCancel')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="session-open-button"
+                        onClick={() => onSelectSession(session.id)}
+                      >
+                        <strong>{getSessionTitle(session)}</strong>
+                        <small>{t('chatMessagesCount', { count: session.messages.length })}</small>
+                        {session.translationLanguage ? <small>{session.translationLanguage}</small> : null}
+                        {session.tutorPrompt ? <span className="session-note">{t('chatCustomTutorPrompt')}</span> : null}
+                      </button>
+                      <div className="session-card-actions">
+                        <button
+                          type="button"
+                          className="link-button"
+                          disabled={isChatBusy}
+                          onClick={() => beginRename(session)}
+                        >
+                          {t('chatRename')}
+                        </button>
+                        <button
+                          type="button"
+                          className="link-button danger-link"
+                          disabled={isChatBusy}
+                          onClick={() => void handleDeleteChatRequest(session)}
+                        >
+                          {t('chatDelete')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              ))
+            )}
+          </div>
+
+          {legacyChatSessions.length > 0 ? (
+            <div className="session-list">
+              <h3>{t('chatLegacyChats')}</h3>
+              <p className="helper-text">{t('chatLegacyHelp')}</p>
+              {legacyChatSessions.slice(0, 6).map((session) => (
+                <article
+                  key={session.id}
+                  className={activeChatSession?.id === session.id ? 'session-card active' : 'session-card'}
+                >
+                  {renamingSessionId === session.id ? (
+                    <div className="session-rename-form">
+                      <input
+                        value={renameValue}
+                        onChange={(event) => setRenameValue(event.target.value)}
+                        placeholder={t('chatChatNamePlaceholder')}
+                        autoFocus
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && renameValue.trim()) {
+                            event.preventDefault();
+                            void handleRenameChat(session);
+                          }
+                        }}
+                      />
+                      <div className="session-card-actions">
+                        <button
+                          type="button"
+                          className="link-button"
+                          disabled={!renameValue.trim() || isChatBusy}
+                          onClick={() => void handleRenameChat(session)}
+                        >
+                          {t('chatSave')}
+                        </button>
+                        <button type="button" className="link-button" disabled={isChatBusy} onClick={cancelRename}>
+                          {t('chatCancel')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="session-open-button"
+                        onClick={() => onSelectSession(session.id)}
+                      >
+                        <strong>{getSessionTitle(session)}</strong>
+                        <small>{t('chatMessagesCount', { count: session.messages.length })}</small>
+                        <span className="session-note">{t('chatLegacyTag')}</span>
+                      </button>
+                      <div className="session-card-actions">
+                        <button
+                          type="button"
+                          className="link-button"
+                          disabled={isChatBusy}
+                          onClick={() => beginRename(session)}
+                        >
+                          {t('chatRename')}
+                        </button>
+                        <button
+                          type="button"
+                          className="link-button danger-link"
+                          disabled={isChatBusy}
+                          onClick={() => void handleDeleteChatRequest(session)}
+                        >
+                          {t('chatDelete')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              ))}
+            </div>
           ) : null}
         </div>
-
-        <label className="full-width">
-          {t('chatTutorPrompt')}
-          <textarea
-            rows={3}
-            value={tutorPrompt}
-            onChange={(event) => setTutorPrompt(event.target.value)}
-            placeholder={t('chatTutorPromptPlaceholder')}
-            disabled={isChatBusy}
-          />
-        </label>
-
-        <div className="session-badges">
-          <span>{getSelectionLabel(selection.mode, selection.group)}</span>
-          <span>{activeTranslationLanguage || t('chatNoActiveLanguage')}</span>
-          <span>{t('chatWordsInScope', { count: selectableWords.length })}</span>
-          <span>{aiReady ? t('chatAiReady') : t('chatSetUpAi')}</span>
-        </div>
-
-        {selection.mode === 'group' && groups.length === 0 ? (
-          <p className="helper-text">{t('chatGroupedWordsHelp')}</p>
-        ) : null}
-
-        {localMessage ? <p className="helper-text">{localMessage}</p> : null}
-
-        <div className="session-list">
-          <h3>{t('chatRecentChats')}</h3>
-          {chatSessions.length === 0 ? (
-            <p className="helper-text">
-              {activeTranslationLanguage
-                ? t('chatNoChatsForLanguage', { language: activeTranslationLanguage })
-                : t('chatNoChats')}
-            </p>
-          ) : (
-            chatSessions.slice(0, 6).map((session) => (
-              <article
-                key={session.id}
-                className={activeChatSession?.id === session.id ? 'session-card active' : 'session-card'}
-              >
-                {renamingSessionId === session.id ? (
-                  <div className="session-rename-form">
-                    <input
-                      value={renameValue}
-                      onChange={(event) => setRenameValue(event.target.value)}
-                      placeholder={t('chatChatNamePlaceholder')}
-                      autoFocus
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' && renameValue.trim()) {
-                          event.preventDefault();
-                          void handleRenameChat(session);
-                        }
-                      }}
-                    />
-                    <div className="session-card-actions">
-                      <button
-                        type="button"
-                        className="link-button"
-                        disabled={!renameValue.trim() || isChatBusy}
-                        onClick={() => void handleRenameChat(session)}
-                      >
-                        {t('chatSave')}
-                      </button>
-                      <button type="button" className="link-button" disabled={isChatBusy} onClick={cancelRename}>
-                        {t('chatCancel')}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="session-open-button"
-                      onClick={() => onSelectSession(session.id)}
-                    >
-                      <strong>{getSessionTitle(session)}</strong>
-                      <small>{t('chatMessagesCount', { count: session.messages.length })}</small>
-                      {session.translationLanguage ? <small>{session.translationLanguage}</small> : null}
-                      {session.tutorPrompt ? <span className="session-note">{t('chatCustomTutorPrompt')}</span> : null}
-                    </button>
-                    <div className="session-card-actions">
-                      <button
-                        type="button"
-                        className="link-button"
-                        disabled={isChatBusy}
-                        onClick={() => beginRename(session)}
-                      >
-                        {t('chatRename')}
-                      </button>
-                      <button
-                        type="button"
-                        className="link-button danger-link"
-                        disabled={isChatBusy}
-                        onClick={() => void handleDeleteChatRequest(session)}
-                      >
-                        {t('chatDelete')}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </article>
-            ))
-          )}
-        </div>
-
-        {legacyChatSessions.length > 0 ? (
-          <div className="session-list">
-            <h3>{t('chatLegacyChats')}</h3>
-            <p className="helper-text">{t('chatLegacyHelp')}</p>
-            {legacyChatSessions.slice(0, 6).map((session) => (
-              <article
-                key={session.id}
-                className={activeChatSession?.id === session.id ? 'session-card active' : 'session-card'}
-              >
-                {renamingSessionId === session.id ? (
-                  <div className="session-rename-form">
-                    <input
-                      value={renameValue}
-                      onChange={(event) => setRenameValue(event.target.value)}
-                      placeholder={t('chatChatNamePlaceholder')}
-                      autoFocus
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' && renameValue.trim()) {
-                          event.preventDefault();
-                          void handleRenameChat(session);
-                        }
-                      }}
-                    />
-                    <div className="session-card-actions">
-                      <button
-                        type="button"
-                        className="link-button"
-                        disabled={!renameValue.trim() || isChatBusy}
-                        onClick={() => void handleRenameChat(session)}
-                      >
-                        {t('chatSave')}
-                      </button>
-                      <button type="button" className="link-button" disabled={isChatBusy} onClick={cancelRename}>
-                        {t('chatCancel')}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="session-open-button"
-                      onClick={() => onSelectSession(session.id)}
-                    >
-                      <strong>{getSessionTitle(session)}</strong>
-                      <small>{t('chatMessagesCount', { count: session.messages.length })}</small>
-                      <span className="session-note">{t('chatLegacyTag')}</span>
-                    </button>
-                    <div className="session-card-actions">
-                      <button
-                        type="button"
-                        className="link-button"
-                        disabled={isChatBusy}
-                        onClick={() => beginRename(session)}
-                      >
-                        {t('chatRename')}
-                      </button>
-                      <button
-                        type="button"
-                        className="link-button danger-link"
-                        disabled={isChatBusy}
-                        onClick={() => void handleDeleteChatRequest(session)}
-                      >
-                        {t('chatDelete')}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </article>
-            ))}
-          </div>
-        ) : null}
       </section>
 
       <section ref={chatAreaRef} className="panel chat-panel">
@@ -673,7 +685,7 @@ export function ChatPanel({
         ) : (
           <>
             <div className="panel-heading">
-              <div>
+            <div>
                 <p className="eyebrow">{t('chatActiveTutorEyebrow')}</p>
                 <h2>{getSessionTitle(activeChatSession)}</h2>
                 <p className="helper-text">{t('chatTutorGuiding', { name: tutorDisplayName })}</p>
@@ -684,6 +696,13 @@ export function ChatPanel({
                 ) : null}
               </div>
               <div className="stats-inline">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setSetupCollapsed((current) => !current)}
+                >
+                  {hideSetupPanel ? t('chatShowSetup') : t('chatHideSetup')}
+                </button>
                 <span>{t('chatGuidedWords', { count: activeWords.length })}</span>
                 {selectedLanguage ? <span>{selectedLanguage}</span> : null}
               </div>

@@ -57,7 +57,7 @@ describe('marathon helpers', () => {
     expect(availability.find((item) => item.difficulty === 'easy')?.missingSide).toBe('english');
   });
 
-  it('builds translation-side answer choices from single visible translations', () => {
+  it('does not use another translation from the same word as a wrong option', () => {
     const card: MarathonCard = {
       id: 'card-1',
       wordId: 'word-1',
@@ -68,6 +68,14 @@ describe('marathon helpers', () => {
     };
     const cards: MarathonCard[] = [
       card,
+      {
+        id: 'card-1b',
+        wordId: 'word-1',
+        englishText: 'apple',
+        translationText: 'פרי',
+        translationLanguage: 'Hebrew',
+        promptSide: 'english',
+      },
       {
         id: 'card-2',
         wordId: 'word-2',
@@ -90,6 +98,7 @@ describe('marathon helpers', () => {
 
     expect(choiceState.correctOption).toBe('תפוח');
     expect(choiceState.options).toContain('תפוח');
+    expect(choiceState.options).not.toContain('פרי');
     expect(choiceState.options).toHaveLength(3);
   });
 });

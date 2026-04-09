@@ -9,7 +9,7 @@ import {
 } from '../lib/marathon';
 import { PromptMixPicker } from './PromptMixPicker';
 import { formatDateTime, normalizeForComparison } from '../lib/text';
-import { filterWordsByTranslationLanguage, getSelectionLabel, getUniqueGroups } from '../lib/study';
+import { filterWordsByTranslationLanguage, getUniqueGroups } from '../lib/study';
 import type {
   AppSettings,
   MarathonAnswer,
@@ -72,22 +72,6 @@ function getDifficultyDescription(
     choices: config.optionCount,
     seconds: config.seconds,
   });
-}
-
-function getMixSummary(
-  englishPromptPercentage: number,
-  translationLanguage: string,
-  t: ReturnType<typeof createTranslator>,
-): string {
-  if (englishPromptPercentage === 100) {
-    return t('studyPromptEnglishOnly');
-  }
-
-  if (englishPromptPercentage === 0) {
-    return t('studyPromptTranslationOnly', { language: translationLanguage });
-  }
-
-  return t('studyPromptBalanced');
 }
 
 export function MarathonPanel({
@@ -586,14 +570,15 @@ export function MarathonPanel({
       ? Math.min(answeredCount + 1, baseCards.length || answeredCount + 1)
       : 0;
   const progressTotal = completedRun ? completedRun.run.totalCards : baseCards.length || poolMetrics.cardCount;
-  const topBadges = [
-    getSelectionLabel(selection.mode, selection.group),
-    activeTranslationLanguage || t('chatNoActiveLanguage'),
-    getMixSummary(englishPromptPercentage, translationLabel, t),
-    t('marathonCardsReady', { count: poolMetrics.cardCount }),
-  ];
-
   function getDifficultySupportCopy() {
+    if (!activeTranslationLanguage) {
+      return t('marathonChooseLanguageFirst');
+    }
+
+    if (activeLanguageWords.length === 0) {
+      return t('marathonAddWordsFirst', { language: activeTranslationLanguage });
+    }
+
     if (selectedDifficulty?.supported) {
       return t('marathonReadyForLevel');
     }
@@ -712,9 +697,7 @@ export function MarathonPanel({
         </div>
 
         <div className="session-badges">
-          {topBadges.map((badge) => (
-            <span key={badge}>{badge}</span>
-          ))}
+          <span>{t('marathonCardsReady', { count: poolMetrics.cardCount })}</span>
         </div>
 
         <p className={selectedDifficulty?.supported ? 'helper-text' : 'helper-text error-text'}>

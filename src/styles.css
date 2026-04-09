@@ -252,6 +252,10 @@ img {
   display: none;
 }
 
+.panel.hidden {
+  display: none;
+}
+
 .panel-grid {
   grid-template-columns: repeat(12, minmax(0, 1fr));
 }
@@ -289,6 +293,14 @@ img {
 .study-layout > .panel:nth-child(3),
 .chat-layout > .panel:nth-child(3) {
   grid-column: span 3;
+}
+
+.chat-layout.setup-hidden > .panel:nth-child(2) {
+  grid-column: span 8;
+}
+
+.chat-layout.setup-hidden > .panel:nth-child(3) {
+  grid-column: span 4;
 }
 
 .settings-layout > .panel:first-child {
@@ -368,6 +380,23 @@ img {
 .study-panel {
   display: grid;
   gap: 14px;
+}
+
+.chat-setup-body {
+  display: grid;
+  gap: 14px;
+  overflow: hidden;
+  max-height: 2200px;
+  opacity: 1;
+  transition:
+    max-height 220ms ease,
+    opacity 180ms ease;
+}
+
+.chat-setup-body.collapsed {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 label {
@@ -1858,6 +1887,23 @@ select:focus {
   display: grid;
   gap: 12px;
   margin-bottom: 18px;
+}
+
+.vocabulary-list-panel {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 14px;
+  align-content: start;
+  min-height: 0;
+}
+
+.vocabulary-list-panel .word-list {
+  min-height: 0;
+  max-height: min(58vh, 760px);
+  overflow-y: auto;
+  padding-right: 8px;
+  align-content: start;
+  scrollbar-gutter: stable;
 }
 
 .settings-tool-card {

@@ -600,7 +600,7 @@ export function VocabularyPanel({
 
       </section>
 
-      <section className="panel">
+      <section className="panel vocabulary-list-panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">{t('vocabDictionaryEyebrow')}</p>
