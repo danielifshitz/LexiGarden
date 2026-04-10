@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createTranslator } from '../lib/i18n';
-import { PromptMixPicker } from './PromptMixPicker';
+import { PromptMixPicker } from './shared/PromptMixPicker';
+import { StudyModeSelector } from './shared/StudyModeSelector';
 import {
   areAnswersEquivalent,
   findMatchingAnswerOption,
@@ -305,43 +306,12 @@ export function StudyPanel({
         </div>
 
         <div className="filter-grid">
-          <label>
-            {t('studyMode')}
-            <select
-              value={selection.mode}
-              onChange={(event) =>
-                setSelection({
-                  mode: event.target.value as StudySelection['mode'],
-                  group:
-                    event.target.value === 'group'
-                      ? selection.group ?? groups[0]
-                      : undefined,
-                })
-              }
-            >
-              <option value="all">{t('studyModeAll')}</option>
-              <option value="lastAdded">{t('studyModeLastAdded')}</option>
-              <option value="group">{t('studyModeGroup')}</option>
-              <option value="lessKnown">{t('studyModeLessKnown')}</option>
-              <option value="lessSeen">{t('studyModeLessSeen')}</option>
-            </select>
-          </label>
-
-          {selection.mode === 'group' ? (
-            <label>
-              {t('studyGroupLabel')}
-              <select
-                value={selection.group ?? groups[0] ?? ''}
-                onChange={(event) => setSelection({ mode: 'group', group: event.target.value })}
-              >
-                {groups.map((group) => (
-                  <option key={group} value={group}>
-                    {group}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
+          <StudyModeSelector
+            selection={selection}
+            groups={groups}
+            onChange={setSelection}
+            t={t}
+          />
 
           <PromptMixPicker
             value={englishPromptPercentage}
@@ -377,7 +347,7 @@ export function StudyPanel({
         {cards.length > 0 && currentIndex >= cards.length ? (
           <div className="empty-state large">
             <p>{t('studyComplete')}</p>
-            <button type="button" className="primary-button" onClick={startSession}>
+            <button type="button" className="primary-button" onClick={startSession} disabled={!canStartSession}>
               {t('studyStartAnotherRound')}
             </button>
           </div>

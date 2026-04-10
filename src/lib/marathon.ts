@@ -18,8 +18,8 @@ export interface MarathonDifficultyConfig {
 export interface MarathonPoolMetrics {
   wordCount: number;
   cardCount: number;
-  uniqueEnglishOptions: number;
-  uniqueTranslationOptions: number;
+  minEnglishChoicesPerCard: number;
+  minTranslationChoicesPerCard: number;
 }
 
 export interface MarathonDifficultyAvailability extends MarathonDifficultyConfig {
@@ -74,16 +74,38 @@ export function getMarathonPoolMetrics(
   selection: StudySelection,
 ): MarathonPoolMetrics {
   const selectedWords = selectWordsByMode(words, settings, selection);
-  const uniqueEnglishOptions = dedupeLabels(selectedWords.map((word) => word.englishText)).length;
-  const uniqueTranslationOptions = dedupeLabels(
-    selectedWords.flatMap((word) => word.translations),
-  ).length;
+  const englishChoiceCapacities = selectedWords.map((word) => {
+    const wrongOptions = dedupeLabels(
+      selectedWords
+        .filter((item) => item.id !== word.id)
+        .map((item) => item.englishText),
+    ).filter(
+      (value) => normalizeForComparison(value) !== normalizeForComparison(word.englishText),
+    );
+
+    return 1 + wrongOptions.length;
+  });
+  const translationChoiceCapacities = selectedWords.flatMap((word) =>
+    word.translations.map((translationText) => {
+      const wrongOptions = dedupeLabels(
+        selectedWords
+          .filter((item) => item.id !== word.id)
+          .flatMap((item) => item.translations),
+      ).filter(
+        (value) => normalizeForComparison(value) !== normalizeForComparison(translationText),
+      );
+
+      return 1 + wrongOptions.length;
+    }),
+  );
 
   return {
     wordCount: selectedWords.length,
     cardCount: selectedWords.reduce((sum, word) => sum + word.translations.length, 0),
-    uniqueEnglishOptions,
-    uniqueTranslationOptions,
+    minEnglishChoicesPerCard:
+      englishChoiceCapacities.length > 0 ? Math.min(...englishChoiceCapacities) : 0,
+    minTranslationChoicesPerCard:
+      translationChoiceCapacities.length > 0 ? Math.min(...translationChoiceCapacities) : 0,
   };
 }
 
@@ -96,9 +118,10 @@ export function getMarathonDifficultyAvailability(
 
   return MARATHON_DIFFICULTY_ORDER.map((difficulty) => {
     const config = MARATHON_DIFFICULTY_CONFIG[difficulty];
-    const missingEnglish = needsEnglishOptions && metrics.uniqueEnglishOptions < config.optionCount;
+    const missingEnglish =
+      needsEnglishOptions && metrics.minEnglishChoicesPerCard < config.optionCount;
     const missingTranslation =
-      needsTranslationOptions && metrics.uniqueTranslationOptions < config.optionCount;
+      needsTranslationOptions && metrics.minTranslationChoicesPerCard < config.optionCount;
 
     return {
       ...config,

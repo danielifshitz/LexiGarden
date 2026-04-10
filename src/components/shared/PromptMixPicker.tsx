@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
-import { createTranslator } from '../lib/i18n';
-import type { SupportedAppLanguage } from '../types';
+import { createTranslator } from '../../lib/i18n';
+import type { SupportedAppLanguage } from '../../types';
 
 function getPromptMixSummary(
   englishPromptPercentage: number,

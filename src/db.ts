@@ -599,8 +599,9 @@ export async function ensureSettings(): Promise<AppSettings> {
   return defaultSettings;
 }
 
-export async function getPersistedState(): Promise<PersistedState> {
+export async function getPersistedState(keys?: Array<keyof PersistedState>): Promise<PersistedState> {
   const settings = await ensureSettings();
+  const loadAll = !keys || keys.length === 0;
 
   const [
     storedWords,
@@ -610,61 +611,64 @@ export async function getPersistedState(): Promise<PersistedState> {
     statusTransitions,
     marathonRuns,
     marathonAnswers,
-  ] =
-    await Promise.all([
-      db.words.orderBy('createdAt').reverse().toArray(),
-      db.reviewAttempts.orderBy('shownAt').reverse().toArray(),
-      db.chatSessions.orderBy('updatedAt').reverse().toArray(),
-      db.aiUsageLogs.orderBy('requestedAt').reverse().toArray(),
-      db.statusTransitions.orderBy('changedAt').reverse().toArray(),
-      db.marathonRuns.orderBy('finishedAt').reverse().toArray(),
-      db.marathonAnswers.orderBy('shownAt').reverse().toArray(),
-    ]);
-  const words = storedWords.map(normalizeWordRecord);
+  ] = await Promise.all([
+    loadAll || keys.includes('words') || keys.includes('settings') ? db.words.orderBy('createdAt').reverse().toArray() : Promise.resolve([]),
+    loadAll || keys.includes('reviewAttempts') ? db.reviewAttempts.orderBy('shownAt').reverse().toArray() : Promise.resolve([]),
+    loadAll || keys.includes('chatSessions') || keys.includes('settings') ? db.chatSessions.orderBy('updatedAt').reverse().toArray() : Promise.resolve([]),
+    loadAll || keys.includes('aiUsageLogs') ? db.aiUsageLogs.orderBy('requestedAt').reverse().toArray() : Promise.resolve([]),
+    loadAll || keys.includes('statusTransitions') ? db.statusTransitions.orderBy('changedAt').reverse().toArray() : Promise.resolve([]),
+    loadAll || keys.includes('marathonRuns') ? db.marathonRuns.orderBy('finishedAt').reverse().toArray() : Promise.resolve([]),
+    loadAll || keys.includes('marathonAnswers') ? db.marathonAnswers.orderBy('shownAt').reverse().toArray() : Promise.resolve([]),
+  ]);
+  const words = loadAll || keys.includes('words') || keys.includes('settings') ? storedWords.map(normalizeWordRecord) : [];
   const wordMap = new Map(words.map((word) => [word.id, word]));
-  const chatSessions = storedChatSessions.map((session) => normalizeChatSession(session, wordMap));
-  const reconciledTranslationLanguages = getAvailableTranslationLanguages(
-    words,
-    settings.translationLanguages,
-  );
-  const reconciledLanguageProfiles = reconcileLanguageProfiles(reconciledTranslationLanguages, settings);
-  const reconciledSettingsBase =
-    settings.activeTranslationLanguage ===
-      resolveActiveTranslationLanguage(
-        words,
-        settings.activeTranslationLanguage,
-        reconciledTranslationLanguages,
-      ) &&
-    JSON.stringify(settings.translationLanguages) === JSON.stringify(reconciledTranslationLanguages) &&
-    JSON.stringify(settings.languageProfiles) === JSON.stringify(reconciledLanguageProfiles)
-      ? settings
-      : {
-          ...settings,
-          activeTranslationLanguage: resolveActiveTranslationLanguage(
-            words,
-            settings.activeTranslationLanguage,
-            reconciledTranslationLanguages,
-          ),
-          translationLanguages: reconciledTranslationLanguages,
-          languageProfiles: reconciledLanguageProfiles,
-        };
-  const reconciledSettings = synchronizeBaseLanguageFields(
-    reconciledSettingsBase,
-    reconciledSettingsBase.activeTranslationLanguage,
-  );
+  const chatSessions = loadAll || keys.includes('chatSessions') || keys.includes('settings') ? storedChatSessions.map((session) => normalizeChatSession(session, wordMap)) : [];
+  
+  let reconciledSettings = settings;
+  if (loadAll || keys.includes('settings') || keys.includes('words') || keys.includes('chatSessions')) {
+    const reconciledTranslationLanguages = getAvailableTranslationLanguages(
+      words,
+      settings.translationLanguages,
+    );
+    const reconciledLanguageProfiles = reconcileLanguageProfiles(reconciledTranslationLanguages, settings);
+    const reconciledSettingsBase =
+      settings.activeTranslationLanguage ===
+        resolveActiveTranslationLanguage(
+          words,
+          settings.activeTranslationLanguage,
+          reconciledTranslationLanguages,
+        ) &&
+      JSON.stringify(settings.translationLanguages) === JSON.stringify(reconciledTranslationLanguages) &&
+      JSON.stringify(settings.languageProfiles) === JSON.stringify(reconciledLanguageProfiles)
+        ? settings
+        : {
+            ...settings,
+            activeTranslationLanguage: resolveActiveTranslationLanguage(
+              words,
+              settings.activeTranslationLanguage,
+              reconciledTranslationLanguages,
+            ),
+            translationLanguages: reconciledTranslationLanguages,
+            languageProfiles: reconciledLanguageProfiles,
+          };
+    reconciledSettings = synchronizeBaseLanguageFields(
+      reconciledSettingsBase,
+      reconciledSettingsBase.activeTranslationLanguage,
+    );
 
-  const settingsChanged = JSON.stringify(settings) !== JSON.stringify(reconciledSettings);
-  const sessionsChanged = storedChatSessions.some(
-    (session, index) => JSON.stringify(session) !== JSON.stringify(chatSessions[index]),
-  );
+    const settingsChanged = JSON.stringify(settings) !== JSON.stringify(reconciledSettings);
+    const sessionsChanged = storedChatSessions.some(
+      (session, index) => JSON.stringify(session) !== JSON.stringify(chatSessions[index]),
+    );
 
-  if (settingsChanged || sessionsChanged) {
-    await db.transaction('rw', db.settings, db.chatSessions, async () => {
-      await Promise.all([
-        settingsChanged ? db.settings.put(reconciledSettings) : Promise.resolve(),
-        sessionsChanged ? db.chatSessions.bulkPut(chatSessions) : Promise.resolve(),
-      ]);
-    });
+    if (settingsChanged || sessionsChanged) {
+      await db.transaction('rw', db.settings, db.chatSessions, async () => {
+        await Promise.all([
+          settingsChanged ? db.settings.put(reconciledSettings) : Promise.resolve(),
+          sessionsChanged ? db.chatSessions.bulkPut(chatSessions) : Promise.resolve(),
+        ]);
+      });
+    }
   }
 
   return {

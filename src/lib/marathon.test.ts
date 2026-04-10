@@ -37,12 +37,12 @@ describe('marathon helpers', () => {
     expect(cards.every((card) => card.promptSide === 'english')).toBe(true);
   });
 
-  it('measures the pool by word count, card count, and distinct options', () => {
+  it('measures the pool by word count, card count, and smallest real choice pool', () => {
     expect(getMarathonPoolMetrics(words, defaultSettings, { mode: 'all' })).toEqual({
       wordCount: 3,
       cardCount: 6,
-      uniqueEnglishOptions: 3,
-      uniqueTranslationOptions: 6,
+      minEnglishChoicesPerCard: 3,
+      minTranslationChoicesPerCard: 4,
     });
   });
 
@@ -100,5 +100,31 @@ describe('marathon helpers', () => {
     expect(choiceState.options).toContain('תפוח');
     expect(choiceState.options).not.toContain('פרי');
     expect(choiceState.options).toHaveLength(3);
+  });
+
+  it('does not mark a level as supported when some cards cannot fill enough translation choices', () => {
+    const unevenWords = [
+      makeWord(1, { translations: ['one', 'two', 'three', 'four'] }),
+      makeWord(2, { translations: ['five'] }),
+      makeWord(3, { translations: ['six'] }),
+    ];
+
+    expect(getMarathonPoolMetrics(unevenWords, defaultSettings, { mode: 'all' })).toEqual({
+      wordCount: 3,
+      cardCount: 6,
+      minEnglishChoicesPerCard: 3,
+      minTranslationChoicesPerCard: 3,
+    });
+
+    const availability = getMarathonDifficultyAvailability(
+      getMarathonPoolMetrics(unevenWords, defaultSettings, { mode: 'all' }),
+      100,
+    );
+
+    expect(availability.find((item) => item.difficulty === 'study')?.supported).toBe(true);
+    expect(availability.find((item) => item.difficulty === 'easy')?.supported).toBe(false);
+    expect(availability.find((item) => item.difficulty === 'easy')?.missingSide).toBe(
+      'translation',
+    );
   });
 });
