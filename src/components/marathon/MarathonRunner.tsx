@@ -1,8 +1,11 @@
+import { Fragment, useEffect } from 'react';
 import { createTranslator } from '../../lib/i18n';
+import { shouldShowAudioForLanguage } from '../../lib/language-settings';
 import { normalizeForComparison } from '../../lib/text';
 import { MarathonScene } from './MarathonScene';
+import { PlayButton } from '../shared/PlayButton';
 import type { MarathonFeedbackKind } from '../../hooks/useMarathonEngine';
-import type { MarathonCard, MarathonDifficulty, SupportedAppLanguage } from '../../types';
+import type { AppSettings, MarathonCard, MarathonDifficulty, SupportedAppLanguage, WordEntry, MarathonAnswer } from '../../types';
 
 interface MarathonRunnerProps {
   currentCard: MarathonCard;
@@ -22,6 +25,9 @@ interface MarathonRunnerProps {
   isSavingRun: boolean;
   showingFeedback: boolean;
   appLanguage: SupportedAppLanguage;
+  settings: AppSettings;
+  words: WordEntry[];
+  answers: MarathonAnswer[];
   onResolveAnswer: (option: string, timedOut: boolean) => void;
   onPause: () => void;
   onResume: () => void;
@@ -47,6 +53,9 @@ export function MarathonRunner({
   isSavingRun,
   showingFeedback,
   appLanguage,
+  settings,
+  words,
+  answers,
   onResolveAnswer,
   onPause,
   onResume,
@@ -54,6 +63,134 @@ export function MarathonRunner({
   getDifficultyLabel,
 }: MarathonRunnerProps) {
   const t = createTranslator(appLanguage);
+  const audioButtonTitle = t('commonPlayAudio');
+  const shouldShowAudio = (language?: string) => shouldShowAudioForLanguage(settings, language);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        (event.target as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+
+      if (isSavingRun) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === 'escape') {
+        event.preventDefault();
+        onStop();
+        return;
+      }
+
+      if (key === 'p') {
+        event.preventDefault();
+        if (!showingFeedback) {
+          if (isPaused) {
+            onResume();
+          } else {
+            onPause();
+          }
+        }
+        return;
+      }
+
+      if (!isPaused && !showingFeedback) {
+        const optionIndex = parseInt(key, 10) - 1;
+        if (!isNaN(optionIndex) && optionIndex >= 0 && optionIndex < currentOptions.length) {
+          event.preventDefault();
+          onResolveAnswer(currentOptions[optionIndex], false);
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSavingRun, isPaused, showingFeedback, currentOptions, onStop, onPause, onResume, onResolveAnswer]);
+
+  function renderAnswerHistory(historyClassName = '') {
+    if (answers.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className={['marathon-history', historyClassName].filter(Boolean).join(' ')}>
+        {answers.slice().reverse().map((answer) => {
+          const word = words.find((item) => item.id === answer.wordId);
+          if (!word) return null;
+
+          const promptText = answer.promptSide === 'english' ? word.englishText : answer.translationText;
+          const correctText = answer.promptSide === 'english' ? answer.translationText : word.englishText;
+          const promptLanguage = answer.promptSide === 'english' ? 'English' : word.translationLanguage;
+          const answerLanguage = answer.promptSide === 'english' ? word.translationLanguage : 'English';
+          const showPromptAudio = shouldShowAudio(promptLanguage);
+          const showAnswerAudio = shouldShowAudio(answerLanguage);
+
+          return (
+            <div key={answer.id} className={`marathon-history-card animate-slide-in-up ${answer.wasCorrect ? 'correct' : 'incorrect'}`}>
+              <div className="marathon-history-main">
+                <span className="marathon-history-token">
+                  <span
+                    className={`marathon-history-prompt ${answer.promptSide === 'english' ? 'english-text' : 'translation-text'}`}
+                  >
+                    {promptText}
+                  </span>
+                  {showPromptAudio ? (
+                    <PlayButton
+                      text={promptText}
+                      language={promptLanguage}
+                      className="marathon-history-inline-audio-button"
+                      title={audioButtonTitle}
+                    />
+                  ) : null}
+                </span>
+                <span className="marathon-history-arrow">→</span>
+                <span className="marathon-history-token">
+                  <span
+                    className={`marathon-history-correct ${answer.promptSide === 'english' ? 'translation-text' : 'english-text'}`}
+                  >
+                    {correctText}
+                  </span>
+                  {showAnswerAudio ? (
+                    <PlayButton
+                      text={correctText}
+                      language={answerLanguage}
+                      className="marathon-history-inline-audio-button"
+                      title={audioButtonTitle}
+                    />
+                  ) : null}
+                </span>
+              </div>
+              {!answer.wasCorrect && answer.selectedOption && (
+                <div className="marathon-history-side">
+                  <span className="marathon-history-token marathon-history-selected-token">
+                    <span
+                      className={`marathon-history-selected ${answer.promptSide === 'english' ? 'translation-text' : 'english-text'}`}
+                    >
+                      {answer.selectedOption}
+                    </span>
+                    {showAnswerAudio ? (
+                      <PlayButton
+                        text={answer.selectedOption}
+                        language={answerLanguage}
+                        className="marathon-history-inline-audio-button"
+                        title={audioButtonTitle}
+                      />
+                    ) : null}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className="marathon-runner">
@@ -61,7 +198,9 @@ export function MarathonRunner({
         <div className="marathon-meta">
           <span>{t('marathonCardCounter', { current: progressCurrent, total: progressTotal })}</span>
           <span>{getDifficultyLabel(difficulty, t)}</span>
-          <span>{t('marathonStreakNow', { count: currentStreak })}</span>
+          <span key={`streak-${currentStreak}`} className={currentStreak > 0 ? 'streak-active' : ''}>
+            {t('marathonStreakNow', { count: currentStreak })}
+          </span>
           <span>{t('marathonLongestStreakNow', { count: longestStreak })}</span>
         </div>
         <div className="marathon-run-actions">
@@ -86,30 +225,44 @@ export function MarathonRunner({
 
       {isPaused ? (
         <article className="marathon-paused-state">
-          <h2>{t('marathonPaused')}</h2>
+          <div className="marathon-paused-state-header">
+            <h2>{t('marathonPaused')}</h2>
+            {answers.length > 0 ? (
+              <p className="eyebrow">{t('marathonPreviousAnswers')}</p>
+            ) : (
+              <p className="helper-text">{t('commonNoDataYet')}</p>
+            )}
+          </div>
+          {renderAnswerHistory('expanded')}
         </article>
       ) : (
-        <>
-          <article className={`marathon-card ${feedbackKind ? `marathon-card-${feedbackKind}` : ''}`}>
+        <Fragment key={currentCard.id}>
+          <article className={`marathon-card animate-slide-in-right ${feedbackKind ? `marathon-card-${feedbackKind}` : ''}`}>
             <p className="eyebrow">
               {currentCard.promptSide === 'english'
                 ? t('marathonShowedInEnglish')
                 : t('marathonShowedInLanguage', { language: currentCard.translationLanguage })}
             </p>
-            <h2
-              className={
-                currentCard.promptSide === 'english'
-                  ? 'study-prompt english-display english-text'
-                  : 'study-prompt translation-display translation-text'
-              }
-            >
-              {currentCard.promptSide === 'english'
-                ? currentCard.englishText
-                : currentCard.translationText}
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+              <h2
+                className={
+                  currentCard.promptSide === 'english'
+                    ? 'study-prompt english-display english-text'
+                    : 'study-prompt translation-display translation-text'
+                }
+                style={{ margin: 0 }}
+              >
+                {currentCard.promptSide === 'english'
+                  ? currentCard.englishText
+                  : currentCard.translationText}
+              </h2>
+              {currentCard.promptSide === 'english' ? (
+                <PlayButton text={currentCard.englishText} title={audioButtonTitle} />
+              ) : null}
+            </div>
           </article>
 
-          <div className="marathon-options">
+          <div className="marathon-options animate-slide-in-up">
             {currentOptions.map((option, index) => {
               const isCorrect = normalizeForComparison(option) === normalizeForComparison(correctOption);
               const isSelected = normalizeForComparison(option) === normalizeForComparison(selectedOption);
@@ -165,7 +318,9 @@ export function MarathonRunner({
               </p>
             </div>
           ) : null}
-        </>
+
+          {renderAnswerHistory()}
+        </Fragment>
       )}
     </div>
   );

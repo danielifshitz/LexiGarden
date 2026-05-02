@@ -26,6 +26,8 @@ function getAiFeatureLabel(feature: AiFeature): string {
       return tRuntime('aiFeatureChat');
     case 'addFromSelection':
       return tRuntime('aiFeatureAddFromChat');
+    case 'explainMistake':
+      return tRuntime('aiFeatureExplainMistake');
     default:
       return tRuntime('aiFeatureChat');
   }
@@ -36,7 +38,7 @@ interface OpenRouterMessage {
   content: string;
 }
 
-interface OpenRouterUsage {
+export interface OpenRouterUsage {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
@@ -377,6 +379,40 @@ export async function testOpenRouterConnection(
       maxTokens: 12,
     },
   );
+}
+
+export async function generateMistakeExplanation(
+  settings: AppSettings,
+  word: WordEntry,
+  userAnswer: string,
+  promptSide: 'english' | 'translation',
+): Promise<{ explanation: string; model: string; usage?: OpenRouterUsage }> {
+  const systemPrompt = `You are a helpful language tutor. The user made a mistake in a vocabulary drill.
+Keep your explanation strictly constrained to 2-3 brief bullets plus one tiny example.
+Do not use conversational filler like "Sure" or "Here is the explanation".
+Be encouraging but concise.`;
+
+  const question =
+    promptSide === 'english'
+      ? `The user was asked to translate the English word "${word.englishText}" into ${word.translationLanguage}. The correct answers are: ${word.translations.join(', ')}. The user answered: "${userAnswer}". Explain the mistake.`
+      : `The user was asked to translate the ${word.translationLanguage} word(s) "${word.translations.join(', ')}" into English. The correct answer is: "${word.englishText}". The user answered: "${userAnswer}". Explain the mistake.`;
+
+  const messages: OpenRouterMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: question },
+  ];
+
+  const result = await callOpenRouter(
+    settings,
+    'explainMistake',
+    messages,
+  );
+
+  return {
+    explanation: result.content,
+    model: result.model,
+    usage: result.usage,
+  };
 }
 
 export async function generateSentenceHint(

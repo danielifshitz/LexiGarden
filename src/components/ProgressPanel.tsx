@@ -28,6 +28,7 @@ import {
   buildDailyTrainedWordPoints,
   filterAiUsageByRange,
   getCurrentTrainingStreak,
+  getLongestTrainingStreak,
   getRecentMarathonRuns,
   getNeedsAttentionWords,
   getRecentlyMasteredWords,
@@ -36,11 +37,13 @@ import {
   summarizeMarathon,
   summarizeAiUsage,
   summarizeProgress,
+  addDays,
+  buildActivityHeatmapPoints,
   type CountPoint,
   type SplitCountPoint,
 } from '../lib/progress';
 import { createTranslator, tRuntime } from '../lib/i18n';
-import { formatDateTime, formatTranslationsForDisplay } from '../lib/text';
+import { formatDateTime, formatTranslationsForDisplay, getTodayDateKey } from '../lib/text';
 import { filterWordsByTranslationLanguage } from '../lib/study';
 import type {
   AiUsageLog,
@@ -66,6 +69,8 @@ interface ProgressPanelProps {
   activeTranslationLanguage: string;
   availableTranslationLanguages: string[];
   layoutMode: PageLayoutMode;
+  dailyCardsGoal: number;
+  dailyMarathonGoal: number;
   onClearAiUsageLogs: () => Promise<void>;
 }
 
@@ -482,6 +487,39 @@ function HorizontalUsageGraph({
   );
 }
 
+function CompactHeatmap({
+  points,
+  emptyLabel,
+}: {
+  points: CountPoint[];
+  emptyLabel: string;
+}) {
+  if (!points || points.length === 0) {
+    return <p className="helper-text">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="heatmap-grid" style={{ display: 'grid', gridTemplateRows: 'repeat(7, 1fr)', gridAutoFlow: 'column', gap: '4px', overflowX: 'auto', paddingBottom: '8px' }}>
+      {points.map((point) => {
+        let intensity = 0;
+        if (point.value > 0) intensity = 1;
+        if (point.value >= 10) intensity = 2;
+        if (point.value >= 30) intensity = 3;
+        if (point.value >= 60) intensity = 4;
+
+        return (
+          <div
+            key={point.key}
+            className={`heatmap-cell intensity-${intensity}`}
+            title={`${point.label}: ${point.value}`}
+            style={{ width: '12px', height: '12px', borderRadius: '2px' }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function getMarathonDifficultyLabel(
   difficulty: MarathonRun['difficulty'],
   t: ReturnType<typeof createTranslator>,
@@ -515,6 +553,8 @@ export function ProgressPanel({
   activeTranslationLanguage,
   availableTranslationLanguages,
   layoutMode,
+  dailyCardsGoal,
+  dailyMarathonGoal,
   onClearAiUsageLogs,
 }: ProgressPanelProps) {
   const t = createTranslator(appLanguage);
@@ -596,7 +636,9 @@ export function ProgressPanel({
     () => summarizeProgress(filteredWords, filteredAttempts, filteredTransitions, periodRange),
     [filteredAttempts, filteredTransitions, filteredWords, periodRange],
   );
-  const currentStreak = useMemo(() => getCurrentTrainingStreak(filteredAttempts), [filteredAttempts]);
+  const currentStreak = useMemo(() => getCurrentTrainingStreak(filteredAttempts, filteredMarathonRuns), [filteredAttempts, filteredMarathonRuns]);
+  const longestStreak = useMemo(() => getLongestTrainingStreak(filteredAttempts, filteredMarathonRuns), [filteredAttempts, filteredMarathonRuns]);
+  const heatmapPoints = useMemo(() => buildActivityHeatmapPoints(filteredAttempts, filteredMarathonRuns, resolveProgressRange({ preset: 'custom', from: addDays(getTodayDateKey(), -89), to: getTodayDateKey() })), [filteredAttempts, filteredMarathonRuns]);
   const recentlyMastered = useMemo(
     () => getRecentlyMasteredWords(filteredWords, filteredTransitions, periodRange),
     [filteredTransitions, filteredWords, periodRange],
@@ -762,6 +804,23 @@ export function ProgressPanel({
           <p className="helper-text">{t('progressTodayHelp')}</p>
         </div>
 
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <strong>{t('progressDailyGoal')}</strong>
+            <span>{todaySummary.totalAttempts} / {dailyCardsGoal}</span>
+          </div>
+          <div style={{ height: '8px', background: 'var(--grid)', borderRadius: '4px', overflow: 'hidden', marginBottom: '16px' }}>
+            <div style={{ height: '100%', background: 'var(--teal)', width: `${Math.min(100, (todaySummary.totalAttempts / dailyCardsGoal) * 100)}%`, transition: 'width 0.3s ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <strong>{t('progressDailyMarathonGoal')}</strong>
+            <span>{marathonTodaySummary.totalAnswers} / {dailyMarathonGoal}</span>
+          </div>
+          <div style={{ height: '8px', background: 'var(--grid)', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ height: '100%', background: 'var(--coral)', width: `${Math.min(100, (marathonTodaySummary.totalAnswers / dailyMarathonGoal) * 100)}%`, transition: 'width 0.3s ease' }} />
+          </div>
+        </div>
+
         <div className="summary-strip four-up">
           <article>
             <span>{todaySummary.newWords}</span>
@@ -796,10 +855,14 @@ export function ProgressPanel({
           </div>
         </div>
 
-        <div className="summary-strip">
+        <div className="summary-strip four-up">
           <article>
             <span>{currentStreak}</span>
             <p>{t('progressCurrentStreak')}</p>
+          </article>
+          <article>
+            <span>{longestStreak}</span>
+            <p>{t('progressLongestStreak')}</p>
           </article>
           <article>
             <span>{periodSummary.promotions}</span>
@@ -810,6 +873,11 @@ export function ProgressPanel({
             <p>{t('progressSetbacks')}</p>
           </article>
         </div>
+
+        <article className="chart-card progress-widget" style={{ padding: '24px' }}>
+          <h3 style={{ marginBottom: '16px' }}>{t('progressActivityHeatmap')}</h3>
+          <CompactHeatmap points={heatmapPoints} emptyLabel={t('commonNoDataYet')} />
+        </article>
 
         <article className="chart-card progress-widget">
           <h3>{t('progressRecentlyMastered')}</h3>

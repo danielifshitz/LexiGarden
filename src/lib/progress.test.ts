@@ -220,8 +220,8 @@ describe('progress helpers', () => {
   });
 
   it('keeps a streak alive through yesterday but breaks it after a missed day', () => {
-    expect(getCurrentTrainingStreak(reviewAttempts, new Date('2026-01-07T12:00:00'))).toBe(2);
-    expect(getCurrentTrainingStreak(reviewAttempts, new Date('2026-01-09T12:00:00'))).toBe(0);
+    expect(getCurrentTrainingStreak(reviewAttempts, [], new Date('2026-01-07T12:00:00'))).toBe(2);
+    expect(getCurrentTrainingStreak(reviewAttempts, [], new Date('2026-01-09T12:00:00'))).toBe(0);
   });
 
   it('tracks mastered and needs-attention words inside the selected range', () => {

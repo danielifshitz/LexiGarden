@@ -95,20 +95,6 @@ export function useMarathonEngine({
   );
 
   useEffect(() => {
-    if (!currentCard) {
-      return;
-    }
-
-    const nextChoiceState = buildMarathonChoices(currentCard, baseCards, difficulty);
-    elapsedBeforePauseRef.current = 0;
-    setElapsedBeforePauseState(0);
-    setCurrentOptions(nextChoiceState.options);
-    setCorrectOption(nextChoiceState.correctOption);
-    setPreparedCardId(currentCard.id);
-    setIsPaused(false);
-  }, [baseCards, currentCard, difficulty, roundDurationMs]);
-
-  useEffect(() => {
     if (
       !currentCard ||
       showingFeedback ||
@@ -215,6 +201,29 @@ export function useMarathonEngine({
     roundStartedAtRef.current = 0;
   }
 
+  function prepareCard(
+    nextCard: MarathonCard,
+    sourceCards: MarathonCard[],
+    answeredWordIds: string[],
+  ) {
+    const nextChoiceState = buildMarathonChoices(
+      nextCard,
+      sourceCards,
+      difficulty,
+      answeredWordIds,
+    );
+
+    elapsedBeforePauseRef.current = 0;
+    roundStartedAtRef.current = 0;
+    setRoundStartedAtState(0);
+    setElapsedBeforePauseState(0);
+    setCurrentCard(nextCard);
+    setCurrentOptions(nextChoiceState.options);
+    setCorrectOption(nextChoiceState.correctOption);
+    setPreparedCardId(nextCard.id);
+    setIsPaused(false);
+  }
+
   function startRun() {
     const nextCards = buildMarathonCards(
       activeLanguageWords,
@@ -234,8 +243,11 @@ export function useMarathonEngine({
     setRunId(crypto.randomUUID());
     setRunStartedAt(new Date().toISOString());
     setBaseCards(nextCards);
-    setCurrentCard(firstCard ?? null);
     setRemainingQueue(restCards);
+
+    if (firstCard) {
+      prepareCard(firstCard, nextCards, []);
+    }
   }
 
   async function finishRun(finalAnswers: MarathonAnswer[], finalStats: {
@@ -390,10 +402,14 @@ export function useMarathonEngine({
         return;
       }
 
-      setCurrentCard(nextCard);
       setRemainingQueue(restCards);
       setFeedbackKind(null);
       setSelectedOption('');
+      prepareCard(
+        nextCard,
+        baseCards,
+        nextAnswers.map((answer) => answer.wordId),
+      );
     }, advanceDelay);
   }
 
@@ -468,6 +484,7 @@ export function useMarathonEngine({
       completedRun,
       savingError,
       showingFeedback,
+      answers,
     },
     actions: {
       startRun,

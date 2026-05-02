@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   generateSentenceHint,
+  generateMistakeExplanation,
   prepareWordFromSelection,
   suggestNextWords,
   suggestRelatedWords,
@@ -57,6 +58,32 @@ export function useAiActions({ settings, words, refreshState, setFlashMessage, t
         kind: 'error',
         text: error instanceof Error ? error.message : t('appCouldNotReachOpenRouter'),
       });
+    } finally {
+      setAiBusyFeature('');
+    }
+  }
+
+  async function handleExplainMistake(word: WordEntry, userAnswer: string, promptSide: 'english' | 'translation') {
+    if (!settings) throw new Error('Settings not loaded');
+    if (!settings.openRouterApiKey) throw new Error('API key not configured');
+
+    const featureId = `explain:${word.id}`;
+    setAiBusyFeature(featureId);
+    try {
+      const response = await generateMistakeExplanation(settings, word, userAnswer, promptSide);
+      await logAiUsage(buildAiUsageLogEntry('explainMistake', response.model, response.usage, true));
+      return response.explanation;
+    } catch (error) {
+      await logAiUsage(
+        buildAiUsageLogEntry(
+          'explainMistake',
+          settings.openRouterModel,
+          undefined,
+          false,
+          error instanceof Error ? error.message : String(error),
+        ),
+      );
+      throw error;
     } finally {
       setAiBusyFeature('');
     }
@@ -220,6 +247,7 @@ export function useAiActions({ settings, words, refreshState, setFlashMessage, t
     actions: {
       handleTestConnection,
       handleGenerateSentence,
+      handleExplainMistake,
       handleSuggestRelatedWords,
       handleSuggestNextWords,
       handlePrepareSelection,

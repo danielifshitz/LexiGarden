@@ -32,6 +32,10 @@ interface MarathonSetupProps {
   onReturnMissedCardsChange: (returnMissedCards: boolean) => void;
   getDifficultyLabel: (difficulty: MarathonDifficulty, t: ReturnType<typeof createTranslator>) => string;
   getDifficultyDescription: (difficulty: MarathonDifficulty, t: ReturnType<typeof createTranslator>) => string;
+  sessionActive: boolean;
+  correctCount?: number;
+  wrongCount?: number;
+  timeoutCount?: number;
 }
 
 export function MarathonSetup({
@@ -56,6 +60,10 @@ export function MarathonSetup({
   onReturnMissedCardsChange,
   getDifficultyLabel,
   getDifficultyDescription,
+  sessionActive,
+  correctCount = 0,
+  wrongCount = 0,
+  timeoutCount = 0,
 }: MarathonSetupProps) {
   const t = createTranslator(appLanguage);
 
@@ -112,57 +120,76 @@ export function MarathonSetup({
         </button>
       </div>
 
-      <div className="filter-grid">
-        <StudyModeSelector
-          selection={selection}
-          groups={groups}
-          onChange={onSelectionChange}
-          t={t}
-        />
+      <div className={`marathon-setup-body${sessionActive ? ' collapsed' : ''}`}>
+        <div className="filter-grid">
+          <StudyModeSelector
+            selection={selection}
+            groups={groups}
+            onChange={onSelectionChange}
+            t={t}
+          />
 
-        <PromptMixPicker
-          value={englishPromptPercentage}
-          onChange={onEnglishPromptPercentageChange}
-          appLanguage={appLanguage}
-          translationLabel={translationLabel}
-        />
+          <PromptMixPicker
+            value={englishPromptPercentage}
+            onChange={onEnglishPromptPercentageChange}
+            appLanguage={appLanguage}
+            translationLabel={translationLabel}
+          />
 
-        <div className="marathon-difficulty-grid full-width">
-          {difficultyOptions.map((option) => (
-            <button
-              key={option.difficulty}
-              type="button"
-              className={
-                difficulty === option.difficulty
-                  ? 'difficulty-card active'
-                  : 'difficulty-card'
-              }
-              disabled={!option.supported}
-              onClick={() => onDifficultyChange(option.difficulty)}
-            >
-              <strong>{getDifficultyLabel(option.difficulty, t)}</strong>
-              <span>{getDifficultyDescription(option.difficulty, t)}</span>
-            </button>
-          ))}
+          <div className="marathon-difficulty-grid full-width">
+            {difficultyOptions.map((option) => (
+              <button
+                key={option.difficulty}
+                type="button"
+                className={
+                  difficulty === option.difficulty
+                    ? 'difficulty-card active'
+                    : 'difficulty-card'
+                }
+                disabled={!option.supported}
+                onClick={() => onDifficultyChange(option.difficulty)}
+              >
+                <strong>{getDifficultyLabel(option.difficulty, t)}</strong>
+                <span>{getDifficultyDescription(option.difficulty, t)}</span>
+              </button>
+            ))}
+          </div>
+
+          <label className="checkbox-row full-width">
+            <input
+              type="checkbox"
+              checked={returnMissedCards}
+              onChange={(event) => onReturnMissedCardsChange(event.target.checked)}
+            />
+            <span>{t('marathonReturnMissed')}</span>
+          </label>
         </div>
 
-        <label className="checkbox-row full-width">
-          <input
-            type="checkbox"
-            checked={returnMissedCards}
-            onChange={(event) => onReturnMissedCardsChange(event.target.checked)}
-          />
-          <span>{t('marathonReturnMissed')}</span>
-        </label>
+        <div className="session-badges">
+          <span>{t('marathonCardsReady', { count: poolMetricsCardCount })}</span>
+        </div>
+
+        <p className={selectedDifficulty?.supported ? 'helper-text' : 'helper-text error-text'}>
+          {getDifficultySupportCopy()}
+        </p>
       </div>
 
-      <div className="session-badges">
-        <span>{t('marathonCardsReady', { count: poolMetricsCardCount })}</span>
-      </div>
-
-      <p className={selectedDifficulty?.supported ? 'helper-text' : 'helper-text error-text'}>
-        {getDifficultySupportCopy()}
-      </p>
+      {sessionActive && (
+        <div className="summary-strip">
+          <article>
+            <span>{correctCount}</span>
+            <p>{t('commonCorrect')}</p>
+          </article>
+          <article>
+            <span>{wrongCount}</span>
+            <p>{t('commonMissed')}</p>
+          </article>
+          <article>
+            <span>{timeoutCount}</span>
+            <p>{t('marathonTimeouts')}</p>
+          </article>
+        </div>
+      )}
     </section>
   );
 }

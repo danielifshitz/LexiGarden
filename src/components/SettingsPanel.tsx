@@ -519,6 +519,55 @@ export function SettingsPanel({
             </select>
           </label>
 
+          <label>
+            {t('settingsTheme')}
+            <select
+              value={draft.theme}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  theme: event.target.value as AppSettings['theme'],
+                }))
+              }
+            >
+              <option value="system">{t('settingsThemeSystem')}</option>
+              <option value="light">{t('settingsThemeLight')}</option>
+              <option value="dark">{t('settingsThemeDark')}</option>
+            </select>
+          </label>
+
+          <label>
+            {t('settingsDailyCardsGoal')}
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              value={draft.dailyCardsGoal}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  dailyCardsGoal: Number(event.target.value),
+                }))
+              }
+            />
+          </label>
+
+          <label>
+            {t('settingsDailyMarathonGoal')}
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              value={draft.dailyMarathonGoal}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  dailyMarathonGoal: Number(event.target.value),
+                }))
+              }
+            />
+          </label>
+
           <label className="slider-field">
             {t('settingsLastAddedPercent')}
             <div className="slider-row">
@@ -778,6 +827,22 @@ export function SettingsPanel({
                             </option>
                           ))}
                         </select>
+                      </label>
+
+                      <label className="checkbox-row full-width">
+                        <input
+                          type="checkbox"
+                          checked={languageProfile.showAudioButtons}
+                          onChange={(event) =>
+                            handleLanguageProfileChange(language, {
+                              showAudioButtons: event.target.checked,
+                            })
+                          }
+                        />
+                        <span>
+                          <strong>{t('settingsShowAudioButtons')}</strong>
+                          <small>{t('settingsShowAudioButtonsHelp')}</small>
+                        </span>
                       </label>
                     </div>
 

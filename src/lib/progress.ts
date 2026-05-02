@@ -92,6 +92,8 @@ function getAiFeatureLabel(feature: AiFeature): string {
       return tRuntime('progressFeatureChat');
     case 'addFromSelection':
       return tRuntime('progressFeatureAddFromChat');
+    case 'explainMistake':
+      return tRuntime('progressFeatureExplainMistake');
     default:
       return tRuntime('progressFeatureChat');
   }
@@ -109,7 +111,7 @@ function formatShortDate(dateKey: string): string {
   }).format(parseDateKey(dateKey));
 }
 
-function addDays(dateKey: string, days: number): string {
+export function addDays(dateKey: string, days: number): string {
   const nextDate = parseDateKey(dateKey);
   nextDate.setDate(nextDate.getDate() + days);
   return getTodayDateKey(nextDate);
@@ -362,12 +364,91 @@ export function buildDailyTransitionPoints(
   }));
 }
 
-export function getCurrentTrainingStreak(reviewAttempts: ReviewAttempt[], now = new Date()): number {
-  const trainingDays = new Set(
-    reviewAttempts
-      .filter((attempt) => isTrainingAction(attempt.action))
-      .map((attempt) => toLocalDateKey(attempt.shownAt)),
-  );
+export function buildActivityHeatmapPoints(
+  reviewAttempts: ReviewAttempt[],
+  marathonRuns: MarathonRun[],
+  range: ResolvedProgressRange,
+): CountPoint[] {
+  const counts = new Map<string, number>();
+
+  for (const attempt of filterAttemptsByRange(reviewAttempts, range)) {
+    const key = toLocalDateKey(attempt.shownAt);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  for (const run of filterMarathonRunsByRange(marathonRuns, range)) {
+    const key = toLocalDateKey(run.finishedAt);
+    counts.set(key, (counts.get(key) ?? 0) + run.answeredCards);
+  }
+
+  return listDateKeys(range).map((key) => ({
+    key,
+    label: formatShortDate(key),
+    value: counts.get(key) ?? 0,
+  }));
+}
+
+export function getLongestTrainingStreak(
+  reviewAttempts: ReviewAttempt[],
+  marathonRuns: MarathonRun[],
+): number {
+  const trainingDays = new Set<string>();
+
+  for (const attempt of reviewAttempts) {
+    if (isTrainingAction(attempt.action)) {
+      trainingDays.add(toLocalDateKey(attempt.shownAt));
+    }
+  }
+
+  for (const run of marathonRuns) {
+    if (run.answeredCards > 0) {
+      trainingDays.add(toLocalDateKey(run.finishedAt));
+    }
+  }
+
+  if (trainingDays.size === 0) {
+    return 0;
+  }
+
+  const sortedDays = [...trainingDays].sort();
+  let longestStreak = 0;
+  let currentStreak = 0;
+  let previousDay: string | null = null;
+
+  for (const day of sortedDays) {
+    if (!previousDay || addDays(previousDay, 1) === day) {
+      currentStreak += 1;
+    } else {
+      currentStreak = 1;
+    }
+    
+    if (currentStreak > longestStreak) {
+      longestStreak = currentStreak;
+    }
+    previousDay = day;
+  }
+
+  return longestStreak;
+}
+
+export function getCurrentTrainingStreak(
+  reviewAttempts: ReviewAttempt[],
+  marathonRuns: MarathonRun[],
+  now = new Date(),
+): number {
+  const trainingDays = new Set<string>();
+
+  for (const attempt of reviewAttempts) {
+    if (isTrainingAction(attempt.action)) {
+      trainingDays.add(toLocalDateKey(attempt.shownAt));
+    }
+  }
+
+  for (const run of marathonRuns) {
+    if (run.answeredCards > 0) {
+      trainingDays.add(toLocalDateKey(run.finishedAt));
+    }
+  }
 
   if (trainingDays.size === 0) {
     return 0;

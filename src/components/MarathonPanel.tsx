@@ -28,6 +28,8 @@ interface MarathonPanelProps {
   activeTranslationLanguage: string;
   layoutMode: PageLayoutMode;
   onSaveRun: (run: MarathonRun, answers: MarathonAnswer[]) => Promise<void>;
+  onExplainMistake: (word: WordEntry, userAnswer: string, promptSide: 'english' | 'translation') => Promise<string>;
+  aiReady: boolean;
 }
 
 function getDifficultyLabel(
@@ -70,6 +72,8 @@ export function MarathonPanel({
   activeTranslationLanguage,
   layoutMode,
   onSaveRun,
+  onExplainMistake,
+  aiReady,
 }: MarathonPanelProps) {
   const t = createTranslator(appLanguage);
   const translationLabel = activeTranslationLanguage || t('commonLanguage');
@@ -171,16 +175,24 @@ export function MarathonPanel({
         onReturnMissedCardsChange={setReturnMissedCards}
         getDifficultyLabel={getDifficultyLabel}
         getDifficultyDescription={getDifficultyDescription}
+        sessionActive={!!state.currentCard && !state.completedRun}
+        correctCount={state.answers.filter(a => a.wasCorrect).length}
+        wrongCount={state.answers.filter(a => !a.wasCorrect && !a.timedOut).length}
+        timeoutCount={state.answers.filter(a => a.timedOut).length}
       />
 
       <section ref={gameAreaRef} className="panel marathon-panel">
         {state.completedRun ? (
           <MarathonResults
+            words={words}
+            settings={settings}
             completedRun={state.completedRun}
             appLanguage={appLanguage}
             savingError={state.savingError}
             onPlayAgain={handleStartRun}
             getDifficultyLabel={getDifficultyLabel}
+            onExplainMistake={onExplainMistake}
+            aiReady={aiReady}
           />
         ) : !state.currentCard ? (
           <div className="empty-state large">
@@ -205,6 +217,9 @@ export function MarathonPanel({
             isSavingRun={state.isSavingRun}
             showingFeedback={state.showingFeedback}
             appLanguage={appLanguage}
+            settings={settings}
+            words={words}
+            answers={state.answers}
             onResolveAnswer={actions.resolveAnswer}
             onPause={actions.pauseRun}
             onResume={actions.resumeRun}

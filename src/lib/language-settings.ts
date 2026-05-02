@@ -6,6 +6,7 @@ export const defaultLanguageProfile: TranslationLanguageProfile = {
   tutorName: 'Tutor',
   masteryThreshold: 3,
   translationFontFamily: 'sans',
+  showAudioButtons: true,
 };
 
 export function clampMasteryThreshold(value: number, fallback = defaultLanguageProfile.masteryThreshold): number {
@@ -22,6 +23,7 @@ export function buildBaseLanguageProfile(
     tutorName?: string;
     masteryThreshold?: number;
     translationFontFamily?: string;
+    showAudioButtons?: boolean;
   },
 ): TranslationLanguageProfile {
   return {
@@ -36,6 +38,10 @@ export function buildBaseLanguageProfile(
       typeof source?.translationFontFamily === 'string'
         ? source.translationFontFamily
         : defaultLanguageProfile.translationFontFamily,
+    showAudioButtons:
+      typeof source?.showAudioButtons === 'boolean'
+        ? source.showAudioButtons
+        : defaultLanguageProfile.showAudioButtons,
   };
 }
 
@@ -60,13 +66,27 @@ export function normalizeLanguageProfile(
       typeof source?.translationFontFamily === 'string'
         ? source.translationFontFamily
         : fallback.translationFontFamily,
+    showAudioButtons:
+      typeof source?.showAudioButtons === 'boolean'
+        ? source.showAudioButtons
+        : fallback.showAudioButtons,
   };
+}
+
+export function isEnglishLanguage(language?: string): boolean {
+  const normalized = normalizeForComparison(language ?? '');
+
+  return normalized === 'english' || normalized === 'en' || normalized.startsWith('en-');
 }
 
 export function getLanguageProfile(
   settings: Pick<
     AppSettings,
-    'learnerName' | 'tutorName' | 'masteryThreshold' | 'translationFontFamily' | 'languageProfiles'
+    | 'learnerName'
+    | 'tutorName'
+    | 'masteryThreshold'
+    | 'translationFontFamily'
+    | 'languageProfiles'
   >,
   language?: string,
 ): TranslationLanguageProfile {
@@ -88,6 +108,24 @@ export function getLanguageProfile(
   }
 
   return normalizeLanguageProfile(normalizedEntry[1], fallback);
+}
+
+export function shouldShowAudioForLanguage(
+  settings: Pick<
+    AppSettings,
+    | 'learnerName'
+    | 'tutorName'
+    | 'masteryThreshold'
+    | 'translationFontFamily'
+    | 'languageProfiles'
+  >,
+  language?: string,
+): boolean {
+  if (!language?.trim() || isEnglishLanguage(language)) {
+    return true;
+  }
+
+  return getLanguageProfile(settings, language).showAudioButtons;
 }
 
 export function reconcileLanguageProfiles(

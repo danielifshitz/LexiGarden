@@ -23,6 +23,7 @@ import type {
   WordEntry,
 } from '../types';
 import { WordEditorFields } from './WordEditorFields';
+import { PlayButton } from './shared/PlayButton';
 
 interface VocabularyPanelProps {
   words: WordEntry[];
@@ -133,6 +134,7 @@ export function VocabularyPanel({
 }: VocabularyPanelProps) {
   const t = createTranslator(appLanguage);
   const [formMessageIsError, setFormMessageIsError] = useState(false);
+  const [isFullFormOpen, setIsFullFormOpen] = useState(false);
   const editorSectionRef = useRef<HTMLDivElement | null>(null);
   const builderSuggestionPanelRef = useRef<HTMLDivElement | null>(null);
   const suggestionPanelRef = useRef<HTMLDivElement | null>(null);
@@ -141,6 +143,9 @@ export function VocabularyPanel({
   const [form, setForm] = useState<WordFormState>(buildEmptyForm(activeTranslationLanguage));
   const [editingWordId, setEditingWordId] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickFormMessage, setQuickFormMessage] = useState('');
+  const [quickFormMessageIsError, setQuickFormMessageIsError] = useState(false);
   const [csvImporting, setCsvImporting] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedWordId, setSelectedWordId] = useState<string>('');
@@ -336,6 +341,46 @@ export function VocabularyPanel({
         error instanceof Error ? error.message : t('vocabNextWordsFailed'),
       );
       setBuilderSuggestionMessageIsError(true);
+    }
+  }
+
+  async function handleQuickSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setQuickSaving(true);
+    setQuickFormMessage('');
+    setQuickFormMessageIsError(false);
+
+    const draft: WordDraft = {
+      englishText: form.englishText.trim(),
+      translationText: form.translationText.trim(),
+      translationLanguage: form.translationLanguage.trim() || activeTranslationLanguage,
+      group: 'General',
+    };
+
+    try {
+      const result = await onCreateWord(draft);
+      setLastSavedWord(result.word);
+      setSelectedWordId(result.word.id);
+      setBuilderSuggestions([]);
+      setBuilderSuggestionMessage('');
+      setBuilderSuggestionMessageIsError(false);
+      setSuggestions([]);
+      setSuggestionMessage('');
+      setSuggestionMessageIsError(false);
+      setQuickFormMessage(describeWordMutation(result, { activeTranslationLanguage }));
+      setQuickFormMessageIsError(false);
+      setForm(buildEmptyForm(activeTranslationLanguage));
+    } catch (error) {
+      setQuickFormMessage(
+        isWordIdentityConflictError(error)
+          ? t('wordIdentityConflict')
+          : error instanceof Error
+            ? error.message
+            : t('commonTryAgain'),
+      );
+      setQuickFormMessageIsError(true);
+    } finally {
+      setQuickSaving(false);
     }
   }
 
@@ -539,7 +584,10 @@ export function VocabularyPanel({
               builderSuggestions.map((suggestion) => (
                 <article key={`${suggestion.englishText}-${suggestion.translationText}`} className="suggestion-card">
                   <div>
-                    <strong className="english-text word-primary">{suggestion.englishText}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <strong className="english-text word-primary">{suggestion.englishText}</strong>
+                      <PlayButton text={suggestion.englishText} />
+                    </div>
                     <p className="translation-copy translation-text">
                       {suggestion.translationText} · {suggestion.translationLanguage}
                     </p>
@@ -561,8 +609,8 @@ export function VocabularyPanel({
         <div ref={editorSectionRef} className="detail-stack builder-form-stack">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">{t('vocabBuilderEyebrow')}</p>
-              <h2>{editingWord ? t('vocabEditTitle') : t('vocabAddTitle')}</h2>
+              <p className="eyebrow">{words.length === 0 ? t('onboardingVocabEyebrow') : t('vocabBuilderEyebrow')}</p>
+              <h2>{words.length === 0 ? t('onboardingVocabTitle') : editingWord ? t('vocabEditTitle') : t('vocabAddTitle')}</h2>
             </div>
             {editingWord ? (
               <button type="button" className="ghost-button" onClick={resetForm}>
@@ -571,7 +619,44 @@ export function VocabularyPanel({
             ) : null}
           </div>
 
-          <form className="word-form" onSubmit={handleSubmit}>
+          {words.length === 0 ? <p className="helper-text">{t('onboardingVocabCopy')}</p> : null}
+
+          {!editingWord && !isFullFormOpen ? (
+            <form className="word-form" onSubmit={handleQuickSubmit} style={{ marginBottom: '24px' }}>
+              <div className="quick-add-row">
+                <input
+                  className="english-input"
+                  value={form.englishText}
+                  onChange={(e) => setForm((c) => ({ ...c, englishText: e.target.value }))}
+                  placeholder={t('fieldEnglish')}
+                  required
+                />
+                <input
+                  className="translation-input"
+                  value={form.translationText}
+                  onChange={(e) => setForm((c) => ({ ...c, translationText: e.target.value }))}
+                  placeholder={form.translationLanguage || activeTranslationLanguage || t('fieldTranslationFallback')}
+                  required
+                />
+                <button type="submit" className="primary-button" disabled={quickSaving}>
+                  {quickSaving ? t('vocabSaving') : t('commonAdd')}
+                </button>
+              </div>
+              {quickFormMessage ? (
+                <p className={quickFormMessageIsError ? 'helper-text error-text' : 'helper-text'}>{quickFormMessage}</p>
+              ) : null}
+            </form>
+          ) : null}
+
+          <details 
+            className="full-form-details" 
+            open={Boolean(editingWord) || isFullFormOpen}
+            onToggle={(e) => setIsFullFormOpen((e.target as HTMLDetailsElement).open)}
+          >
+            <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--teal)', marginBottom: '16px' }}>
+              {editingWord ? t('vocabEditTitle') : t('vocabFullFormSummary')}
+            </summary>
+            <form className="word-form" onSubmit={handleSubmit}>
             <WordEditorFields
               appLanguage={appLanguage}
               value={form}
@@ -596,6 +681,7 @@ export function VocabularyPanel({
               ) : null}
             </div>
           </form>
+          </details>
         </div>
 
       </section>
@@ -802,7 +888,10 @@ export function VocabularyPanel({
                               className="suggestion-card"
                             >
                               <div>
-                                <strong className="english-text word-primary">{suggestion.englishText}</strong>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <strong className="english-text word-primary">{suggestion.englishText}</strong>
+                                  <PlayButton text={suggestion.englishText} />
+                                </div>
                                 <p className="translation-copy translation-text">
                                   {suggestion.translationText} · {suggestion.translationLanguage}
                                 </p>
@@ -832,9 +921,12 @@ export function VocabularyPanel({
         <div className="panel-heading">
           <div>
             <p className="eyebrow">{t('vocabWordDetailsEyebrow')}</p>
-            <h2 className={selectedWord ? 'english-text' : undefined}>
-              {selectedWord ? selectedWord.englishText : t('commonWord')}
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 className={selectedWord ? 'english-text' : undefined} style={{ margin: 0 }}>
+                {selectedWord ? selectedWord.englishText : t('commonWord')}
+              </h2>
+              {selectedWord ? <PlayButton text={selectedWord.englishText} /> : null}
+            </div>
           </div>
         </div>
 

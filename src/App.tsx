@@ -100,6 +100,7 @@ export default function App() {
   const {
     handleTestConnection,
     handleGenerateSentence,
+    handleExplainMistake,
     handleSuggestRelatedWords,
     handleSuggestNextWords,
     handlePrepareSelection,
@@ -254,6 +255,28 @@ export default function App() {
     await refreshState(['marathonRuns', 'marathonAnswers']);
   }
 
+  useEffect(() => {
+    if (!settings) return;
+    
+    const applyTheme = () => {
+      const theme = settings.theme;
+      if (theme === 'system') {
+        const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = prefersDark ? 'dark' : 'light';
+      } else {
+        document.documentElement.dataset.theme = theme;
+      }
+    };
+
+    applyTheme();
+
+    const mediaQuery = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (mediaQuery) {
+      mediaQuery.addEventListener('change', applyTheme);
+      return () => mediaQuery.removeEventListener('change', applyTheme);
+    }
+  }, [settings?.theme]);
+
   if (loading || !settings) {
     return (
       <div
@@ -378,138 +401,131 @@ export default function App() {
       ) : null}
 
       <main className="screen-grid">
-        {screen === 'study' && (
-          <section className="screen-panel active">
-            <StudyPanel
-              words={words}
-              settings={scopedSettings}
-              appLanguage={appLanguage}
-              activeTranslationLanguage={activeTranslationLanguage}
-              layoutMode={settings.studyLayoutMode}
-              aiReady={aiReady}
-              sentenceHints={sentenceHints}
-              aiBusyFeature={aiBusyFeature}
-              onRecordReview={handleRecordReview}
-              onSnoozeWord={handleSnoozeWord}
-              onGenerateSentence={handleGenerateSentence}
-            />
-          </section>
-        )}
+        <section className={`screen-panel ${screen === 'study' ? 'active' : ''}`} style={{ display: screen === 'study' ? 'block' : 'none' }}>
+          <StudyPanel
+            words={words}
+            settings={scopedSettings}
+            appLanguage={appLanguage}
+            activeTranslationLanguage={activeTranslationLanguage}
+            layoutMode={settings.studyLayoutMode}
+            aiReady={aiReady}
+            sentenceHints={sentenceHints}
+            aiBusyFeature={aiBusyFeature}
+            onRecordReview={handleRecordReview}
+            onSnoozeWord={handleSnoozeWord}
+            onGenerateSentence={handleGenerateSentence}
+            onExplainMistake={handleExplainMistake}
+          />
+        </section>
 
-        {screen === 'marathon' && (
-          <section className="screen-panel active">
-            <MarathonPanel
-              words={words}
-              settings={scopedSettings}
-              appLanguage={appLanguage}
-              activeTranslationLanguage={activeTranslationLanguage}
-              layoutMode={settings.marathonLayoutMode}
-              onSaveRun={handleSaveMarathonRun}
-            />
-          </section>
-        )}
+        <section className={`screen-panel ${screen === 'marathon' ? 'active' : ''}`} style={{ display: screen === 'marathon' ? 'block' : 'none' }}>
+          <MarathonPanel
+            words={words}
+            settings={scopedSettings}
+            appLanguage={appLanguage}
+            activeTranslationLanguage={activeTranslationLanguage}
+            layoutMode={settings.marathonLayoutMode}
+            onSaveRun={handleSaveMarathonRun}
+            onExplainMistake={handleExplainMistake}
+            aiReady={!!settings.openRouterApiKey}
+          />
+        </section>
 
-        {screen === 'vocabulary' && (
-          <section className="screen-panel active">
-            <VocabularyPanel
+        <section className={`screen-panel ${screen === 'vocabulary' ? 'active' : ''}`} style={{ display: screen === 'vocabulary' ? 'block' : 'none' }}>
+          <VocabularyPanel
+            words={words}
+            reviewAttempts={reviewAttempts}
+            settings={scopedSettings}
+            appLanguage={appLanguage}
+            activeTranslationLanguage={activeTranslationLanguage}
+            availableTranslationLanguages={availableTranslationLanguages}
+            layoutMode={settings.vocabularyLayoutMode}
+            aiReady={aiReady}
+            structuredAiReady={modelCapabilities.supportsStructuredOutputs}
+            aiBusyFeature={aiBusyFeature}
+            onCreateWord={handleCreateWord}
+            onImportWords={handleImportWords}
+            onUpdateWord={handleUpdateWord}
+            onDeleteWord={handleDeleteWord}
+            onSuggestNextWords={handleSuggestNextWords}
+            onSuggestRelatedWords={handleSuggestRelatedWords}
+            onQuickAddSuggestion={handleQuickAddSuggestion}
+          />
+        </section>
+
+        <section className={`screen-panel ${screen === 'chat' ? 'active' : ''}`} style={{ display: screen === 'chat' ? 'block' : 'none' }}>
+          <ChatPanel
+            words={words}
+            settings={scopedSettings}
+            appLanguage={appLanguage}
+            activeTranslationLanguage={activeTranslationLanguage}
+            availableTranslationLanguages={availableTranslationLanguages}
+            layoutMode={settings.chatLayoutMode}
+            chatSessions={visibleChatSessions}
+            legacyChatSessions={legacyChatSessions}
+            activeChatSession={activeChatSession}
+            aiReady={aiReady}
+            structuredAiReady={modelCapabilities.supportsStructuredOutputs}
+            aiBusyFeature={aiBusyFeature}
+            onStartChat={handleStartChat}
+            onSendChatMessage={handleSendChatMessage}
+            onEditChatMessage={handleEditChatMessage}
+            onStopChatGeneration={handleStopChatGeneration}
+            onRenameChat={handleRenameChat}
+            onDeleteChat={handleDeleteChat}
+            onPrepareSelection={handlePrepareSelection}
+            onCreateWord={handleCreateWord}
+            onSelectSession={setActiveChatSessionId}
+          />
+        </section>
+
+        <section className={`screen-panel ${screen === 'progress' ? 'active' : ''}`} style={{ display: screen === 'progress' ? 'block' : 'none' }}>
+          <Suspense
+            fallback={
+              <div className="loading-state">
+                <p>{liveT('loadingProgress')}</p>
+              </div>
+            }
+          >
+            <ProgressPanel
               words={words}
               reviewAttempts={reviewAttempts}
-              settings={scopedSettings}
+              aiUsageLogs={aiUsageLogs}
+              statusTransitions={statusTransitions}
+              marathonRuns={marathonRuns}
+              marathonAnswers={marathonAnswers}
               appLanguage={appLanguage}
               activeTranslationLanguage={activeTranslationLanguage}
               availableTranslationLanguages={availableTranslationLanguages}
-              layoutMode={settings.vocabularyLayoutMode}
-              aiReady={aiReady}
-              structuredAiReady={modelCapabilities.supportsStructuredOutputs}
-              aiBusyFeature={aiBusyFeature}
-              onCreateWord={handleCreateWord}
-              onImportWords={handleImportWords}
-              onUpdateWord={handleUpdateWord}
-              onDeleteWord={handleDeleteWord}
-              onSuggestNextWords={handleSuggestNextWords}
-              onSuggestRelatedWords={handleSuggestRelatedWords}
-              onQuickAddSuggestion={handleQuickAddSuggestion}
+              layoutMode={settings.progressLayoutMode}
+              dailyCardsGoal={settings.dailyCardsGoal}
+              dailyMarathonGoal={settings.dailyMarathonGoal}
+              onClearAiUsageLogs={handleClearAiUsageLogs}
             />
-          </section>
-        )}
+          </Suspense>
+        </section>
 
-        {screen === 'chat' && (
-          <section className="screen-panel active">
-            <ChatPanel
-              words={words}
-              settings={scopedSettings}
-              appLanguage={appLanguage}
-              activeTranslationLanguage={activeTranslationLanguage}
-              availableTranslationLanguages={availableTranslationLanguages}
-              layoutMode={settings.chatLayoutMode}
-              chatSessions={visibleChatSessions}
-              legacyChatSessions={legacyChatSessions}
-              activeChatSession={activeChatSession}
-              aiReady={aiReady}
-              structuredAiReady={modelCapabilities.supportsStructuredOutputs}
-              aiBusyFeature={aiBusyFeature}
-              onStartChat={handleStartChat}
-              onSendChatMessage={handleSendChatMessage}
-              onEditChatMessage={handleEditChatMessage}
-              onStopChatGeneration={handleStopChatGeneration}
-              onRenameChat={handleRenameChat}
-              onDeleteChat={handleDeleteChat}
-              onPrepareSelection={handlePrepareSelection}
-              onCreateWord={handleCreateWord}
-              onSelectSession={setActiveChatSessionId}
-            />
-          </section>
-        )}
-
-        {screen === 'progress' && (
-          <section className="screen-panel active">
-            <Suspense
-              fallback={
-                <div className="loading-state">
-                  <p>{liveT('loadingProgress')}</p>
-                </div>
-              }
-            >
-              <ProgressPanel
-                words={words}
-                reviewAttempts={reviewAttempts}
-                aiUsageLogs={aiUsageLogs}
-                statusTransitions={statusTransitions}
-                marathonRuns={marathonRuns}
-                marathonAnswers={marathonAnswers}
-                appLanguage={appLanguage}
-                activeTranslationLanguage={activeTranslationLanguage}
-                availableTranslationLanguages={availableTranslationLanguages}
-                layoutMode={settings.progressLayoutMode}
-                onClearAiUsageLogs={handleClearAiUsageLogs}
-              />
-            </Suspense>
-          </section>
-        )}
-
-        {screen === 'settings' && (
-          <section className="screen-panel active">
-            <SettingsPanel
-              settings={settings}
-              words={words}
-              appLanguage={appLanguage}
-              layoutMode={settings.settingsLayoutMode}
-              models={models}
-              modelsLoading={modelsLoading}
-              modelsError={modelsError}
-              modelCapabilities={modelCapabilities}
-              aiBusyFeature={aiBusyFeature}
-              onSaveSettings={handleSaveSettings}
-              onLoadModels={(apiKey) => handleLoadModels(true, apiKey)}
-              onTestConnection={handleTestConnection}
-              onExportBackup={handleExportBackup}
-              onImportBackup={handleImportBackup}
-              onMergeWords={handleMergeWords}
-              onDeleteWords={handleDeleteWords}
-              onDeleteLanguage={handleDeleteLanguage}
-            />
-          </section>
-        )}
+        <section className={`screen-panel ${screen === 'settings' ? 'active' : ''}`} style={{ display: screen === 'settings' ? 'block' : 'none' }}>
+          <SettingsPanel
+            settings={settings}
+            words={words}
+            appLanguage={appLanguage}
+            layoutMode={settings.settingsLayoutMode}
+            models={models}
+            modelsLoading={modelsLoading}
+            modelsError={modelsError}
+            modelCapabilities={modelCapabilities}
+            aiBusyFeature={aiBusyFeature}
+            onSaveSettings={handleSaveSettings}
+            onLoadModels={(apiKey) => handleLoadModels(true, apiKey)}
+            onTestConnection={handleTestConnection}
+            onExportBackup={handleExportBackup}
+            onImportBackup={handleImportBackup}
+            onMergeWords={handleMergeWords}
+            onDeleteWords={handleDeleteWords}
+            onDeleteLanguage={handleDeleteLanguage}
+          />
+        </section>
       </main>
     </div>
   );

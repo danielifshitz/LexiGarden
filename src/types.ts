@@ -1,7 +1,7 @@
 export type StudyMode = 'all' | 'lastAdded' | 'group' | 'lessKnown' | 'lessSeen';
 export type PromptSide = 'english' | 'translation';
 export type WordStatus = 'new' | 'learning' | 'known';
-export type AiFeature = 'sentenceHint' | 'relatedWords' | 'nextWords' | 'chat' | 'addFromSelection';
+export type AiFeature = 'sentenceHint' | 'relatedWords' | 'nextWords' | 'chat' | 'addFromSelection' | 'explainMistake';
 export type ReviewAction = 'check' | 'dontKnow' | 'dontShowToday';
 export type AiRequestState = 'idle' | 'loading' | 'success' | 'error';
 export type Screen = 'study' | 'marathon' | 'vocabulary' | 'chat' | 'progress' | 'settings';
@@ -15,6 +15,7 @@ export interface TranslationLanguageProfile {
   tutorName: string;
   masteryThreshold: number;
   translationFontFamily: string;
+  showAudioButtons: boolean;
 }
 
 export interface ImageHint {
@@ -62,9 +63,14 @@ export interface WordStatusTransition {
   masteryThreshold: number;
 }
 
+export type Theme = 'light' | 'dark' | 'system';
+
 export interface AppSettings {
   id: 'app';
   appLanguage: SupportedAppLanguage;
+  theme: Theme;
+  dailyCardsGoal: number;
+  dailyMarathonGoal: number;
   learnerName: string;
   tutorName: string;
   masteryThreshold: number;

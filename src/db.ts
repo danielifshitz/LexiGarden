@@ -43,6 +43,9 @@ import {
 export const defaultSettings: AppSettings = {
   id: 'app',
   appLanguage: resolveInitialAppLanguage(),
+  theme: 'system',
+  dailyCardsGoal: 20,
+  dailyMarathonGoal: 50,
   learnerName: '',
   tutorName: 'Tutor',
   masteryThreshold: 3,
@@ -188,6 +191,18 @@ function normalizeSettings(input?: Record<string, unknown> | null): AppSettings 
     appLanguage: resolveSupportedAppLanguage(
       typeof source.appLanguage === 'string' ? source.appLanguage : undefined,
     ),
+    theme:
+      source.theme === 'light' || source.theme === 'dark' || source.theme === 'system'
+        ? source.theme
+        : defaultSettings.theme,
+    dailyCardsGoal:
+      typeof source.dailyCardsGoal === 'number' && source.dailyCardsGoal > 0
+        ? source.dailyCardsGoal
+        : defaultSettings.dailyCardsGoal,
+    dailyMarathonGoal:
+      typeof source.dailyMarathonGoal === 'number' && source.dailyMarathonGoal > 0
+        ? source.dailyMarathonGoal
+        : defaultSettings.dailyMarathonGoal,
     activeTranslationLanguage,
     translationLanguages,
     languageProfiles: reconcileLanguageProfiles(translationLanguages, {

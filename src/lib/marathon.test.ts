@@ -102,6 +102,89 @@ describe('marathon helpers', () => {
     expect(choiceState.options).toHaveLength(3);
   });
 
+  it('prefers fresh wrong options over already answered words', () => {
+    const card: MarathonCard = {
+      id: 'card-4',
+      wordId: 'word-4',
+      englishText: 'squash',
+      translationText: 'למעוך',
+      translationLanguage: 'Hebrew',
+      promptSide: 'translation',
+    };
+    const cards: MarathonCard[] = [
+      {
+        id: 'card-1',
+        wordId: 'word-1',
+        englishText: 'brag',
+        translationText: 'להתרברב',
+        translationLanguage: 'Hebrew',
+        promptSide: 'translation',
+      },
+      {
+        id: 'card-2',
+        wordId: 'word-2',
+        englishText: 'order',
+        translationText: 'לסדר',
+        translationLanguage: 'Hebrew',
+        promptSide: 'translation',
+      },
+      {
+        id: 'card-3',
+        wordId: 'word-3',
+        englishText: 'impeccable',
+        translationText: 'ללא רבב',
+        translationLanguage: 'Hebrew',
+        promptSide: 'translation',
+      },
+      card,
+    ];
+
+    const choiceState = buildMarathonChoices(card, cards, 'study', ['word-1']);
+
+    expect(choiceState.correctOption).toBe('squash');
+    expect(choiceState.options).toContain('squash');
+    expect(choiceState.options).not.toContain('brag');
+    expect(choiceState.options).toHaveLength(3);
+  });
+
+  it('falls back to already answered words when needed to fill the option count', () => {
+    const card: MarathonCard = {
+      id: 'card-3',
+      wordId: 'word-3',
+      englishText: 'garden',
+      translationText: 'גן',
+      translationLanguage: 'Hebrew',
+      promptSide: 'translation',
+    };
+    const cards: MarathonCard[] = [
+      {
+        id: 'card-1',
+        wordId: 'word-1',
+        englishText: 'apple',
+        translationText: 'תפוח',
+        translationLanguage: 'Hebrew',
+        promptSide: 'translation',
+      },
+      {
+        id: 'card-2',
+        wordId: 'word-2',
+        englishText: 'book',
+        translationText: 'ספר',
+        translationLanguage: 'Hebrew',
+        promptSide: 'translation',
+      },
+      card,
+    ];
+
+    const choiceState = buildMarathonChoices(card, cards, 'study', ['word-1']);
+
+    expect(choiceState.correctOption).toBe('garden');
+    expect(choiceState.options).toContain('garden');
+    expect(choiceState.options).toContain('apple');
+    expect(choiceState.options).toContain('book');
+    expect(choiceState.options).toHaveLength(3);
+  });
+
   it('does not mark a level as supported when some cards cannot fill enough translation choices', () => {
     const unevenWords = [
       makeWord(1, { translations: ['one', 'two', 'three', 'four'] }),

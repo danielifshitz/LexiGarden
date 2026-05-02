@@ -167,24 +167,53 @@ export function buildMarathonChoices(
   card: MarathonCard,
   cards: MarathonCard[],
   difficulty: MarathonDifficulty,
+  answeredWordIds: string[] = [],
 ): { options: string[]; correctOption: string } {
   const { optionCount } = MARATHON_DIFFICULTY_CONFIG[difficulty];
   const correctOption = card.promptSide === 'english' ? card.translationText : card.englishText;
-  const pool =
+  const answeredWordIdSet = new Set(answeredWordIds);
+  const cardsForPromptSide = (sourceCards: MarathonCard[]) =>
     card.promptSide === 'english'
-      ? dedupeLabels(
-          cards
-            .filter((item) => item.wordId !== card.wordId)
-            .map((item) => item.translationText),
-        )
-      : dedupeLabels(
-          cards
-            .filter((item) => item.wordId !== card.wordId)
-            .map((item) => item.englishText),
-        );
-  const wrongOptions = shuffleArray(
-    pool.filter((value) => normalizeForComparison(value) !== normalizeForComparison(correctOption)),
-  ).slice(0, Math.max(0, optionCount - 1));
+      ? dedupeLabels(sourceCards.map((item) => item.translationText))
+      : dedupeLabels(sourceCards.map((item) => item.englishText));
+  const unseenPool = cardsForPromptSide(
+    cards.filter((item) => item.wordId !== card.wordId && !answeredWordIdSet.has(item.wordId)),
+  );
+  const fullPool = cardsForPromptSide(
+    cards.filter((item) => item.wordId !== card.wordId),
+  );
+  const wrongOptions: string[] = [];
+  const usedWrongOptionKeys = new Set<string>();
+
+  for (const value of shuffleArray(unseenPool)) {
+    const key = normalizeForComparison(value);
+
+    if (
+      key === normalizeForComparison(correctOption) ||
+      usedWrongOptionKeys.has(key) ||
+      wrongOptions.length >= Math.max(0, optionCount - 1)
+    ) {
+      continue;
+    }
+
+    usedWrongOptionKeys.add(key);
+    wrongOptions.push(value);
+  }
+
+  for (const value of shuffleArray(fullPool)) {
+    const key = normalizeForComparison(value);
+
+    if (
+      key === normalizeForComparison(correctOption) ||
+      usedWrongOptionKeys.has(key) ||
+      wrongOptions.length >= Math.max(0, optionCount - 1)
+    ) {
+      continue;
+    }
+
+    usedWrongOptionKeys.add(key);
+    wrongOptions.push(value);
+  }
 
   return {
     options: shuffleArray([correctOption, ...wrongOptions]),
