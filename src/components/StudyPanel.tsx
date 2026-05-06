@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { createTranslator } from '../lib/i18n';
 import { shouldShowAudioForLanguage } from '../lib/language-settings';
 import { PromptMixPicker } from './shared/PromptMixPicker';
@@ -94,6 +94,7 @@ export function StudyPanel({
   const studyAreaRef = useRef<HTMLElement | null>(null);
   const [selection, setSelection] = useState<StudySelection>({ mode: 'all' });
   const [englishPromptPercentage, setEnglishPromptPercentage] = useState(50);
+  const [cardLimitInput, setCardLimitInput] = useState('');
   const [cards, setCards] = useState<StudyCard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answer, setAnswer] = useState('');
@@ -115,6 +116,11 @@ export function StudyPanel({
     const todayKey = getTodayDateKey();
     return word.snoozedUntilDate !== todayKey;
   }).length;
+  const parsedCardLimit = Number(cardLimitInput);
+  const cardLimit =
+    Number.isFinite(parsedCardLimit) && parsedCardLimit > 0
+      ? Math.min(candidateCount, Math.floor(parsedCardLimit))
+      : undefined;
   const canStartSession = Boolean(activeTranslationLanguage) && candidateCount > 0;
 
   const currentCard = cards[currentIndex] ?? null;
@@ -214,6 +220,8 @@ export function StudyPanel({
       settings,
       selection,
       englishPromptPercentage,
+      undefined,
+      cardLimit,
     );
     resetSessionState();
     setSessionStartedAt(new Date().toISOString());
@@ -240,6 +248,11 @@ export function StudyPanel({
     }
 
     return '';
+  }
+
+  function handleCardLimitChange(event: ChangeEvent<HTMLInputElement>) {
+    const nextValue = event.target.value.replace(/[^\d]/g, '');
+    setCardLimitInput(nextValue);
   }
 
   function goToNextCard() {
@@ -705,12 +718,26 @@ export function StudyPanel({
 
         <div className={`study-setup-body${currentCard ? ' collapsed' : ''}`}>
           <div className="filter-grid">
-            <StudyModeSelector
-              selection={selection}
-              groups={groups}
-              onChange={setSelection}
-              t={t}
-            />
+            <div className="study-mode-stack">
+              <StudyModeSelector
+                selection={selection}
+                groups={groups}
+                onChange={setSelection}
+                t={t}
+              />
+            </div>
+
+            <label className="field-shell">
+              <span>{t('studyCardLimit')}</span>
+              <input
+                type="number"
+                min={1}
+                inputMode="numeric"
+                value={cardLimitInput}
+                onChange={handleCardLimitChange}
+                placeholder={t('studyCardLimitPlaceholder')}
+              />
+            </label>
 
             <PromptMixPicker
               value={englishPromptPercentage}
@@ -722,6 +749,7 @@ export function StudyPanel({
 
           <div className="session-badges">
             <span>{t('studyEligibleToday', { count: candidateCount })}</span>
+            {cardLimit ? <span>{t('studyRoundSize', { count: cardLimit })}</span> : null}
           </div>
 
           {getSetupMessage() ? <p className="helper-text">{getSetupMessage()}</p> : null}

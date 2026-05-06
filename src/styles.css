@@ -550,6 +550,11 @@ select:focus {
   gap: 14px;
 }
 
+.study-mode-stack {
+  display: grid;
+  gap: 14px;
+}
+
 .form-actions,
 .action-row,
 .backup-row,

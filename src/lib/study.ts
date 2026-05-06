@@ -203,14 +203,22 @@ export function buildStudyCards(
   selection: StudySelection,
   englishPromptPercentage = 50,
   todayDateKey = getTodayDateKey(),
+  cardLimit?: number,
 ): StudyCard[] {
   const eligibleWords = selectWordsByMode(words, settings, selection).filter(
     (word) => word.snoozedUntilDate !== todayDateKey,
   );
   const safeEnglishPercentage = Math.max(0, Math.min(100, Math.round(englishPromptPercentage)));
+  const safeCardLimit =
+    typeof cardLimit === 'number' && Number.isFinite(cardLimit)
+      ? Math.max(1, Math.floor(cardLimit))
+      : undefined;
+  const selectedWords = safeCardLimit
+    ? shuffleArray(eligibleWords).slice(0, safeCardLimit)
+    : shuffleArray(eligibleWords);
   const cards: StudyCard[] = [];
 
-  for (const word of shuffleArray(eligibleWords)) {
+  for (const word of selectedWords) {
     cards.push({
       word,
       promptSide: Math.random() * 100 < safeEnglishPercentage ? 'english' : 'translation',

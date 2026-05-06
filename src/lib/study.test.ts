@@ -129,6 +129,21 @@ describe('study selection helpers', () => {
     expect(translationOnlyCards.every((card) => card.promptSide === 'translation')).toBe(true);
   });
 
+  it('limits the number of cards when a round size is set', () => {
+    const limitedCards = buildStudyCards(
+      words,
+      defaultSettings,
+      { mode: 'all' },
+      100,
+      '2026-04-30',
+      2,
+    );
+
+    expect(limitedCards).toHaveLength(2);
+    expect(new Set(limitedCards.map((card) => card.word.id)).size).toBe(2);
+    expect(limitedCards.every((card) => card.promptSide === 'english')).toBe(true);
+  });
+
   it('builds cards only for the chosen translation language', () => {
     const filteredCards = buildStudyCards(
       filterWordsByTranslationLanguage(
